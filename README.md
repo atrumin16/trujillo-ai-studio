@@ -52,6 +52,41 @@
 
 ---
 
+## 🌿 Enterprise Branching Model
+
+| Branch | Purpose | Deployment Trigger |
+| :--- | :--- | :--- |
+| `main` | **Production Release** | Production deployment on Cloudflare Edge |
+| `develop` | **Staging & Integration** | Feature testing, model evaluations & active development |
+| `feature/*` | Feature development | Target pull requests merged into `develop` |
+
+---
+
+## 📁 Repository Structure
+
+```
+trujillo-ai-studio/
+├── public/                  # Static SPA assets, CSS, JS and i18n translation catalogs
+│   ├── assets/              # App bundle and localized language packs (26+ languages)
+│   └── _headers             # Security headers & edge cache directives
+├── src/                     # Cloudflare Worker edge backend
+│   ├── memory/              # Conversation turns, KV resolution, user personas & schema
+│   ├── index.js             # Main entry point & request router
+│   ├── html_shell.js        # Responsive SSR shell & corporate dark chrome
+│   ├── ops.js               # Analytics, Groq fallback ladder & operations metrics
+│   ├── seo.js               # Metadata, sitemap.xml, robots.txt & llms.txt generator
+│   └── time.js              # Real-time system context & timezone resolution
+├── scripts/                 # Asset extractors, translation builders & memory tests
+├── docs/                    # Architecture runbooks & zero-cost email guides
+├── web/                     # React / Vite alternate frontend client
+├── register.js              # Discord slash command registrar CLI
+├── wrangler.toml.example    # Configuration template for self-hosters
+├── wrangler.toml            # Edge deployment configuration
+└── LICENSE                  # MIT License
+```
+
+---
+
 ## 🚀 Self-Hosting Guide (Deploy to Your Own Infrastructure)
 
 Follow these steps to deploy your own instance of AI Studio and Discord Bot onto your Cloudflare account.
