@@ -5,7 +5,7 @@ import {
   formatRelativeHuman
 } from './time.js';
 
-const OWNER_INBOX = 'alberto@trujillomingorance.com'
+const OWNER_INBOX = 'admin@example.com'
 const OPS_TTL = 14 * 24 * 3600
 const IDEA_MAX = 4000
 const IDEA_MIN = 8
@@ -192,7 +192,7 @@ export async function handleIdeaPost({ body, ip, env, sendEmail }) {
 
   if (typeof sendEmail === 'function') {
     await sendEmail({
-      to: OWNER_INBOX,
+      to: env?.OWNER_INBOX || env?.OWNER_EMAIL || OWNER_INBOX,
       subject: `[Trujillo AI] Idea (${catLabel}): ${text.slice(0, 60)}`,
       heading: 'Nueva Idea de Usuario',
       text: `${catLabel}\n${fromLine}\n${relativeTime}\n\n${text}\n\nID: ${item.id}`,
@@ -449,7 +449,7 @@ export async function sendDailyOpsReport(env, sendEmail) {
   const mail = formatOpsReport(data)
   if (typeof sendEmail !== 'function') return { ok: false, error: 'no_mailer' }
   return sendEmail({
-    to: OWNER_INBOX,
+    to: env?.OWNER_INBOX || env?.OWNER_EMAIL || OWNER_INBOX,
     subject: mail.subject,
     text: mail.text,
     html: mail.html,

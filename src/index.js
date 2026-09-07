@@ -37,8 +37,8 @@ const APP_FROM_EMAIL = 'no-reply@trujillomingorance.com';
 const APP_SUPPORT_EMAIL = 'alberto@trujillomingorance.com';
 const APP_FROM_NAME = 'Trujillo AI';
 const APP_ORIGIN = 'https://ai.trujillomingorance.com';
-const GOOGLE_CLIENT_ID = '161745150528-5pb84k9upvamvlvnc7lg6nr1ku74vc4a.apps.googleusercontent.com';
-const X_OAUTH_CLIENT_ID = 'NF94WVVIT1dzSXZNaTJuYjRXSEc6MTpjaQ';
+const GOOGLE_CLIENT_ID = '';
+const X_OAUTH_CLIENT_ID = '';
 const X_OAUTH_CLIENT_SECRET = '';
 
 const AVAILABLE_OPEN_MODELS = [
@@ -790,7 +790,7 @@ export default {
           return new Response(JSON.stringify({ error: 'Código de verificación incorrecto o expirado.' }), { status: 400, headers: corsHeaders });
         }
 
-        const tier = isOwnerUser(email) ? 'enterprise' : 'free';
+        const tier = isOwnerUser(email, env) ? 'enterprise' : 'free';
         const pictureUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(pending.name)}&background=000000&color=fff`;
 
         const userRecord = {
@@ -859,7 +859,7 @@ export default {
           return new Response(JSON.stringify({ error: 'Correo o contraseña incorrectos.' }), { status: 401, headers: corsHeaders });
         }
 
-        const tier = isOwnerUser(email) ? 'enterprise' : (userRecord.tier || 'free');
+        const tier = isOwnerUser(email, env) ? 'enterprise' : (userRecord.tier || 'free');
         const token = await generateJwtToken(userRecord.id, email, env.JWT_SECRET || 'trujillo_jwt_secret_2026');
 
         return new Response(JSON.stringify({
@@ -1085,9 +1085,9 @@ export default {
           if (userStr) userRecord = JSON.parse(userStr);
         }
 
-        const isOwner = isOwnerUser(email);
+        const isOwner = isOwnerUser(email, env);
         const userId = userRecord?.id || ('usr_' + crypto.randomUUID().slice(0, 16));
-        const userName = userRecord?.name || (isOwner ? 'Alberto Trujillo' : 'Usuario');
+        const userName = userRecord?.name || (isOwner ? (env?.OWNER_NAME || 'Admin') : 'Usuario');
         const tier = (isOwner || userRecord?.tier === 'enterprise') ? 'enterprise' : 'free';
         const pictureUrl = userRecord?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=000000&color=fff`;
 
@@ -1149,7 +1149,7 @@ export default {
         ok: true,
         usage: {
           ...usage,
-          plan: user?.tier || (isOwnerUser(ident) ? 'enterprise' : 'free')
+          plan: user?.tier || (isOwnerUser(ident, env) ? 'enterprise' : 'free')
         },
         ops
       }), {
@@ -1204,7 +1204,7 @@ export default {
     if (url.pathname === '/api/ops' && isGetOrHead) {
       const user = await getAuthedUser(request, env);
       const ident = user?.email || '';
-      if (!isOwnerUser(ident)) {
+      if (!isOwnerUser(ident, env)) {
         return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders });
       }
       const report = await collectReport(env);
@@ -1254,7 +1254,7 @@ export default {
 
     if (url.pathname === '/api/ops/report' && request.method === 'POST') {
       const user = await getAuthedUser(request, env);
-      if (!isOwnerUser(user?.email)) {
+      if (!isOwnerUser(user?.email, env)) {
         return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders });
       }
       const sent = await sendDailyOpsReport(env, (opts) => sendAppEmail(env, {
@@ -1518,21 +1518,19 @@ export default {
 // ==========================================
 // Handlers & Funciones de Apoyo
 // ==========================================
-const USER_DAILY_TOKEN_LIMIT = 50000;
-const OWNER_EMAILS = ['alberto@trujillomingorance.com', 'atrumin16@gmail.com', 'jostrume16@gmail.com'];
-const OWNER_DISCORD_IDS = ['1056428300588818432'];
-
-function isOwnerUser(userIdentifier) {
+function isOwnerUser(userIdentifier, env = null) {
   if (!userIdentifier) return false;
   const idStr = String(userIdentifier).toLowerCase().replace(/^@/, '').replace(/^x_/, '');
-  if (OWNER_EMAILS.some(e => idStr === e)) return true;
-  if (OWNER_DISCORD_IDS.some(id => idStr === id)) return true;
-  const local = idStr.split('@')[0];
-  return local === 'atrumin16';
+  const envEmails = (env?.OWNER_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+  const envDiscordIds = (env?.OWNER_DISCORD_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
+  if (envEmails.some(e => idStr === e)) return true;
+  if (envDiscordIds.some(id => idStr === id)) return true;
+  if (env?.OWNER_EMAIL && idStr === env.OWNER_EMAIL.toLowerCase()) return true;
+  return false;
 }
 
 async function checkAndConsumeGlobalTokens(env, userIdentifier, estimatedTokens = 350) {
-  if (isOwnerUser(userIdentifier)) {
+  if (isOwnerUser(userIdentifier, env)) {
     return { allowed: true, current: 0, limit: 'unlimited', isOwner: true };
   }
 
@@ -1578,7 +1576,7 @@ function nextUtcMidnightIso() {
 }
 
 async function peekTokenUsage(env, userIdentifier) {
-  if (isOwnerUser(userIdentifier)) {
+  if (isOwnerUser(userIdentifier, env)) {
     return { current: 0, limit: USER_DAILY_TOKEN_LIMIT, remaining: USER_DAILY_TOKEN_LIMIT, unlimited: true, resetAt: nextUtcMidnightIso() };
   }
   const today = new Date().toISOString().slice(0, 10);
@@ -1682,7 +1680,7 @@ async function handleWebChatStream(request, env, ctx) {
     }
 
     const userIdentifier = authedUser?.email || request.headers.get('CF-Connecting-IP') || 'anon';
-    const isOwner = isOwnerUser(userIdentifier);
+    const isOwner = isOwnerUser(userIdentifier, env);
 
     // Control de Cuota Diaria por Usuario / IP
     if (!userGroqKey && !isOwner) {
@@ -3593,7 +3591,7 @@ async function upsertSocialUser(env, { email, name, picture, provider, providerI
     user = await getCachedKvValue(env.BOT_MEMORY, `user_provider_${provider}_${providerId}`);
   }
   if (!user) user = await loadUserByEmail(env, emailKey);
-  const owner = isOwnerUser(emailKey) || isOwnerUser(providerId);
+  const owner = isOwnerUser(emailKey, env) || isOwnerUser(providerId, env);
   const now = Date.now();
   const fallbackPicture = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || emailKey)}&background=000000&color=fff`;
   if (user) {

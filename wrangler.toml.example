@@ -1,0 +1,54 @@
+# Cloudflare Worker Configuration Template for Trujillo AI Studio
+# Copy this file to wrangler.toml and configure your own resources:
+#   cp wrangler.toml.example wrangler.toml
+
+name = "trujillo-ai-studio"
+main = "src/index.js"
+compatibility_date = "2026-08-16"
+workers_dev = true
+
+# (Optional) Custom domains: Configure if you manage a zone in Cloudflare
+# routes = [
+#   { pattern = "ai.yourdomain.com", custom_domain = true }
+# ]
+
+# Static assets binding for the web studio SPA
+[assets]
+directory = "./public"
+binding = "ASSETS"
+html_handling = "none"
+not_found_handling = "none"
+run_worker_first = ["/*"]
+
+# Daily automated operations report (07:00 UTC)
+[triggers]
+crons = ["0 7 * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
+[vars]
+# Default Groq model for completions:
+# Options: "openai/gpt-oss-120b", "qwen/qwen3.6-27b", "openai/gpt-oss-20b", "groq/compound"
+GROQ_MODEL = "openai/gpt-oss-120b"
+
+# Public site domain for SEO canonicals, auth redirects and emails
+SITE_DOMAIN = "ai.yourdomain.com"
+
+# Comma-separated owner emails and Discord IDs for unlimited token quota
+OWNER_EMAILS = "admin@yourdomain.com"
+OWNER_DISCORD_IDS = ""
+
+# Discord Bot integration (from https://discord.com/developers/applications)
+# Can also be set via secrets: wrangler secret put DISCORD_PUBLIC_KEY
+DISCORD_APPLICATION_ID = "YOUR_DISCORD_APPLICATION_ID"
+DISCORD_PUBLIC_KEY = "YOUR_DISCORD_PUBLIC_KEY"
+
+# Persistent Cloudflare KV storage
+# Create your namespace by running:
+#   npx wrangler kv:namespace create BOT_MEMORY
+# Then paste the generated namespace id below:
+[[kv_namespaces]]
+binding = "BOT_MEMORY"
+id = "YOUR_KV_NAMESPACE_ID"

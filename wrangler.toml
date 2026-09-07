@@ -1,21 +1,19 @@
-name = "groq-discord-bot"
+name = "trujillo-ai-studio"
 main = "src/index.js"
 compatibility_date = "2026-08-16"
 workers_dev = true
 
-routes = [
-  { pattern = "ai.trujillomingorance.com", custom_domain = true },
-  { pattern = "groq.trujillomingorance.com", custom_domain = true },
-  { pattern = "guides.trujillomingorance.com", custom_domain = true },
-  { pattern = "guias.trujillomingorance.com", custom_domain = true }
-]
+# Optional: Add your custom domain routes in Cloudflare
+# routes = [
+#   { pattern = "ai.yourdomain.com", custom_domain = true }
+# ]
 
 [assets]
 directory = "./public"
 binding = "ASSETS"
 html_handling = "none"
 not_found_handling = "none"
-# El Worker maneja todo el enrutamiento edge, incluidos los assets de subdominios
+# Edge routing for static assets
 run_worker_first = ["/*"]
 
 [triggers]
@@ -26,11 +24,13 @@ enabled = true
 head_sampling_rate = 0.1
 
 [vars]
-DISCORD_APPLICATION_ID = "1538306837240225842"
-DISCORD_PUBLIC_KEY = "a4295ee257e001d2b9a36e8f1bdc1c83ee61eb4176e07ede3eb24b6416f0dda0"
 GROQ_MODEL = "openai/gpt-oss-120b"
-SITE_DOMAIN = "ai.trujillomingorance.com"
+SITE_DOMAIN = "ai.example.com"
+OWNER_EMAILS = "admin@example.com"
+OWNER_DISCORD_IDS = ""
+DISCORD_APPLICATION_ID = "YOUR_DISCORD_APPLICATION_ID"
+DISCORD_PUBLIC_KEY = "YOUR_DISCORD_PUBLIC_KEY"
 
 [[kv_namespaces]]
 binding = "BOT_MEMORY"
-id = "bab271312bfa4c84a483c6ee7b7a1756"
+id = "YOUR_KV_NAMESPACE_ID"

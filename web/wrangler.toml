@@ -1,7 +1,7 @@
-name = "trujillo-ai"
+name = "trujillo-ai-web"
 compatibility_date = "2026-09-04"
 pages_build_output_dir = "dist"
 
 [[kv_namespaces]]
 binding = "TRUJILLO_CACHE"
-id = "bab271312bfa4c84a483c6ee7b7a1756"
+id = "YOUR_KV_NAMESPACE_ID"

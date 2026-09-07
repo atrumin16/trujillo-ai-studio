@@ -1,13 +1,15 @@
 /**
- * Script bilingüe para registrar los comandos completos de Trujillo AI en Discord
- * Uso: node register.js [DISCORD_BOT_TOKEN]
+ * Bilingual script to register Discord slash commands for Trujillo AI Studio
+ * Usage: node register.js <DISCORD_BOT_TOKEN> <DISCORD_APPLICATION_ID>
+ * Or set DISCORD_BOT_TOKEN and DISCORD_APPLICATION_ID environment variables.
  */
 
-const APPLICATION_ID = "1538306837240225842";
 const BOT_TOKEN = process.argv[2] || process.env.DISCORD_BOT_TOKEN || "";
+const APPLICATION_ID = process.argv[3] || process.env.DISCORD_APPLICATION_ID || "";
 
-if (!BOT_TOKEN) {
-  console.error("Falta el Bot Token. Uso: node register.js <TU_DISCORD_BOT_TOKEN>");
+if (!BOT_TOKEN || !APPLICATION_ID) {
+  console.error("Usage: node register.js <DISCORD_BOT_TOKEN> <DISCORD_APPLICATION_ID>");
+  console.error("Or set DISCORD_BOT_TOKEN and DISCORD_APPLICATION_ID in your environment.");
   process.exit(1);
 }
 
