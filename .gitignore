@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+web/node_modules/
+
+# Cloudflare & Build outputs
+.wrangler/
+web/.wrangler/
+dist/
+web/dist/
+.mf/
+
+# Environment and Secrets
+.env
+.env.*
+.dev.vars
+!.dev.vars.example
+!.env.example
+
+# Temporary patch, migration & debug scripts
+patch*.cjs
+rmTzDuplicate*.cjs
+tz*.cjs
+fix*.cjs
+head.txt
+test_live_eval.cjs
+checkThemes.cjs
+find_classes.cjs
+extract.cjs
+update.cjs
+update_bio.js
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

@@ -1,0 +1,240 @@
+<div class="modal-backdrop" id="modal-settings">
+  <div class="modal-card settings-wide">
+    <div class="modal-header"><div class="modal-title" data-i18n="settings">Ajustes</div><button class="modal-close-btn" data-modal="modal-settings" type="button" aria-label="Cerrar" data-i18n="close" data-i18n-attr="aria-label">✕</button></div>
+    <div class="settings-layout">
+      <nav class="settings-nav" aria-label="Ajustes">
+        <div class="settings-nav-label" data-i18n="navApp">App</div>
+        <button type="button" class="settings-nav-btn active" data-pane="pane-general" data-i18n="tabGeneral">General</button>
+        <button type="button" class="settings-nav-btn" data-pane="pane-account" data-i18n="tabAccount">Cuenta</button>
+        <button type="button" class="settings-nav-btn" data-pane="pane-appearance" data-i18n="tabAppearance">Apariencia</button>
+        <button type="button" class="settings-nav-btn" data-pane="pane-behavior" data-i18n="tabBehavior">Comportamiento</button>
+        <button type="button" class="settings-nav-btn" data-pane="pane-customize" data-i18n="tabCustomize">Personalizar</button>
+        <div class="settings-nav-label" data-i18n="navBilling">Plan</div>
+        <button type="button" class="settings-nav-btn" data-pane="pane-plan" data-i18n="tabPlan">Plan y facturación</button>
+        <button type="button" class="settings-nav-btn" data-pane="pane-usage" data-i18n="tabUsage">Uso</button>
+        <div class="settings-nav-label" data-i18n="navData">Datos</div>
+        <button type="button" class="settings-nav-btn" data-pane="pane-data" data-i18n="tabData">Controles de datos</button>
+        <button type="button" class="settings-nav-btn settings-nav-logout" id="nav-logout-btn" data-i18n="logout" hidden>Cerrar sesión</button>
+      </nav>
+      <div class="settings-main">
+        <div id="pane-general" class="settings-pane active">
+          <div class="settings-section-title" data-i18n="tabGeneral">General</div>
+          <p class="settings-section-desc" data-i18n="generalDesc">Idioma, modelo por defecto y longitud de respuesta.</p>
+          <div class="form-group">
+            <label class="form-label" data-i18n="language">Idioma</label>
+            <div id="set-lang" class="lang-picker open-down"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="setDefaultModel">Modelo por defecto</label>
+            <select id="set-default-model" class="form-input"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="setDefaultLength">Longitud por defecto</label>
+            <div class="choice-row" id="set-default-length">
+              <button type="button" class="choice-pill" data-pref="ta_len_mode" data-value="corto" data-i18n="short">Corto</button>
+              <button type="button" class="choice-pill" data-pref="ta_len_mode" data-value="normal" data-i18n="normal">Normal</button>
+              <button type="button" class="choice-pill" data-pref="ta_len_mode" data-value="extendido" data-i18n="long">Largo</button>
+            </div>
+          </div>
+          <p class="settings-hint">Trujillo AI · 2026.2 · ai.trujillomingorance.com</p>
+        </div>
+
+        <div id="pane-account" class="settings-pane">
+          <div class="settings-section-title" data-i18n="tabAccount">Cuenta</div>
+          <p class="settings-section-desc" data-i18n="accountDesc">Tu perfil, plan, correos y acceso.</p>
+          <div id="account-guest" style="display:none;text-align:center;padding:18px 8px;">
+            <p style="font-size:0.84rem;color:var(--muted);margin-bottom:12px" data-i18n="needLogin">Inicia sesión para sincronizar la cuenta.</p>
+            <a href="/login" class="topbar-action-btn primary" style="text-decoration:none" data-i18n="signIn">Acceder</a>
+          </div>
+          <div id="account-authed">
+            <div class="settings-card">
+              <div class="settings-kv">
+                <div class="settings-kv-label" data-i18n="displayName">Nombre</div>
+                <div class="settings-kv-control">
+                  <input type="text" id="set-display-name" class="form-input" maxlength="80" autocomplete="name">
+                </div>
+              </div>
+              <div class="settings-kv">
+                <div class="settings-kv-label" data-i18n="emailLabel">Correo</div>
+                <div class="settings-kv-value" id="account-email-display"></div>
+              </div>
+              <div class="settings-kv">
+                <div class="settings-kv-label" data-i18n="tabPlan">Plan y facturación</div>
+                <span class="plan-badge" id="account-plan-badge">FREE</span>
+              </div>
+            </div>
+
+            <div class="settings-block-title" data-i18n="emailPrefs">Correos</div>
+            <p class="settings-hint" data-i18n="emailsHint">Elige qué correos quieres recibir en tu bandeja.</p>
+            <div class="settings-card">
+              <label class="toggle-row"><span data-i18n="notifyProduct">Novedades de producto</span><input type="checkbox" id="set-notify-product" checked></label>
+              <label class="toggle-row"><span data-i18n="notifySecurity">Alertas de seguridad</span><input type="checkbox" id="set-notify-security" checked></label>
+              <label class="toggle-row"><span data-i18n="notifyDigest">Resumen ocasional</span><input type="checkbox" id="set-notify-digest"></label>
+              <div class="settings-actions">
+                <button type="button" id="test-email-btn" class="topbar-action-btn" data-i18n="testEmail">Enviar correo de prueba</button>
+              </div>
+            </div>
+
+            <p id="oauth-pass-hint" class="settings-hint" style="display:none;margin-top:16px"></p>
+            <div id="password-fields">
+              <div class="settings-block-title" data-i18n="passwordSection">Contraseña</div>
+              <div class="settings-card">
+                <div class="form-group">
+                  <label class="form-label" data-i18n="currentPassword">Contraseña actual</label>
+                  <input type="password" id="set-cur-pass" class="form-input" autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" data-i18n="newPassword">Nueva contraseña</label>
+                  <input type="password" id="set-new-pass" class="form-input" autocomplete="new-password" minlength="6">
+                </div>
+                <div class="settings-actions">
+                  <button type="button" id="change-pass-btn" class="topbar-action-btn primary" data-i18n="changePassword">Cambiar contraseña</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-block-title" data-i18n="sessionTitle">Sesión</div>
+            <div class="settings-card" style="padding:16px">
+              <div class="settings-kv-label" data-i18n="logout">Cerrar sesión</div>
+              <p class="settings-kv-sub" data-i18n="sessionHint">Cierra la sesión en este navegador. El historial local se queda.</p>
+              <button type="button" id="settings-logout-btn" class="logout-big-btn" data-i18n="logout">Cerrar sesión</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="pane-appearance" class="settings-pane">
+          <div class="settings-section-title" data-i18n="tabAppearance">Apariencia</div>
+          <p class="settings-section-desc" data-i18n="appearanceDesc">Tema, tamaño de letra y densidad de la interfaz.</p>
+          <div class="form-group">
+            <label class="form-label" data-i18n="appearanceTheme">Tema</label>
+            <div class="theme-grid">
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="dark"><span class="theme-swatch" data-swatch="dark"></span><span data-i18n="themeDark">Oscuro</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="gray"><span class="theme-swatch" data-swatch="gray"></span><span data-i18n="themeGray">Gris</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="dim"><span class="theme-swatch" data-swatch="dim"></span><span data-i18n="themeDim">Carbón</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="navy"><span class="theme-swatch" data-swatch="navy"></span><span data-i18n="themeNavy">Marino</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="light"><span class="theme-swatch" data-swatch="light"></span><span data-i18n="themeLight">Claro</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="paper"><span class="theme-swatch" data-swatch="paper"></span><span data-i18n="themePaper">Papel</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="system"><span class="theme-swatch" data-swatch="system"></span><span data-i18n="themeSystem">Sistema</span></button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="accentLabel">Acento</label>
+            <div class="accent-row">
+              <button type="button" class="accent-dot" data-pref="ta_accent" data-value="#38bdf8" style="background:#38bdf8" title="Cielo"></button>
+              <button type="button" class="accent-dot" data-pref="ta_accent" data-value="#a1a1aa" style="background:#a1a1aa" title="Gris"></button>
+              <button type="button" class="accent-dot" data-pref="ta_accent" data-value="#34d399" style="background:#34d399" title="Menta"></button>
+              <button type="button" class="accent-dot" data-pref="ta_accent" data-value="#2dd4bf" style="background:#2dd4bf" title="Teal"></button>
+              <button type="button" class="accent-dot" data-pref="ta_accent" data-value="#818cf8" style="background:#818cf8" title="Índigo"></button>
+              <button type="button" class="accent-dot" data-pref="ta_accent" data-value="#a78bfa" style="background:#a78bfa" title="Violeta"></button>
+              <button type="button" class="accent-dot" data-pref="ta_accent" data-value="#f59e0b" style="background:#f59e0b" title="Ámbar"></button>
+              <button type="button" class="accent-dot" data-pref="ta_accent" data-value="#fb7185" style="background:#fb7185" title="Rosa"></button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="fontSize">Tamaño de letra</label>
+            <div class="choice-row">
+              <button type="button" class="choice-pill" data-pref="ta_font" data-value="sm" data-i18n="fontSm">Compacto</button>
+              <button type="button" class="choice-pill" data-pref="ta_font" data-value="md" data-i18n="fontMd">Normal</button>
+              <button type="button" class="choice-pill" data-pref="ta_font" data-value="lg" data-i18n="fontLg">Grande</button>
+            </div>
+          </div>
+          <div class="settings-card">
+            <label class="toggle-row"><span data-i18n="compactSidebar">Barra lateral compacta</span><input type="checkbox" id="set-compact-sb"></label>
+            <label class="toggle-row"><span data-i18n="reduceMotion">Reducir movimiento</span><input type="checkbox" id="set-reduce-motion"></label>
+          </div>
+        </div>
+
+        <div id="pane-behavior" class="settings-pane">
+          <div class="settings-section-title" data-i18n="tabBehavior">Comportamiento</div>
+          <p class="settings-section-desc" data-i18n="behaviorDesc">Cómo envía, busca y confirma el workspace.</p>
+          <div class="settings-card">
+            <label class="toggle-row"><span data-i18n="enterToSend">Enter envía el mensaje</span><input type="checkbox" id="set-enter-send" checked></label>
+            <label class="toggle-row"><span data-i18n="autoSearch">Buscar en la web por defecto</span><input type="checkbox" id="set-auto-search"></label>
+            <label class="toggle-row"><span data-i18n="showTimestamps">Mostrar hora en los mensajes</span><input type="checkbox" id="set-show-time"></label>
+            <label class="toggle-row"><span data-i18n="confirmDeleteChat">Confirmar al borrar un chat</span><input type="checkbox" id="set-confirm-del" checked></label>
+          </div>
+        </div>
+
+        <div id="pane-customize" class="settings-pane">
+          <div class="settings-section-title" data-i18n="tabCustomize">Personalizar</div>
+          <p class="settings-section-desc" data-i18n="customizeDesc">Instrucciones propias y tono de respuesta.</p>
+          <div class="form-group">
+            <label class="form-label" data-i18n="toneLabel">Tono</label>
+            <div class="choice-row">
+              <button type="button" class="choice-pill" data-pref="ta_tone" data-value="auto" data-i18n="toneAuto">Auto</button>
+              <button type="button" class="choice-pill" data-pref="ta_tone" data-value="direct" data-i18n="toneDirect">Directo</button>
+              <button type="button" class="choice-pill" data-pref="ta_tone" data-value="technical" data-i18n="toneTechnical">Técnico</button>
+              <button type="button" class="choice-pill" data-pref="ta_tone" data-value="concise" data-i18n="toneConcise">Conciso</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="systemPrompt">Instrucción de sistema</label>
+            <textarea id="custom-system-prompt" class="form-textarea" placeholder="Cómo debe responder Trujillo AI…"></textarea>
+          </div>
+          <div class="settings-card">
+            <label class="toggle-row"><span data-i18n="useDocsContext">Usar documentos como memoria</span><input type="checkbox" id="set-use-docs" checked></label>
+          </div>
+        </div>
+
+        <div id="pane-plan" class="settings-pane">
+          <div class="settings-section-title" data-i18n="tabPlan">Plan y facturación</div>
+          <p class="settings-section-desc" data-i18n="planDesc">Tu plan actual. El cobro con tarjeta llegará cuando se active Stripe.</p>
+          <div class="form-group">
+            <label class="form-label" data-i18n="currentPlan">Plan actual</label>
+            <div><span class="plan-badge" id="plan-current-badge">FREE</span></div>
+          </div>
+          <p class="settings-hint" data-i18n="planHint">Free: 50.000 tokens/día. Enterprise: sin tope (cuentas propias). BYOK: clave Groq en el navegador, sin cuota.</p>
+          <a class="topbar-action-btn" href="mailto:alberto@trujillomingorance.com?subject=Trujillo%20AI%20Enterprise" style="text-decoration:none;width:fit-content" data-i18n="planContact">Contactar para Enterprise</a>
+        </div>
+
+        <div id="pane-usage" class="settings-pane">
+          <div class="settings-section-title" data-i18n="tabUsage">Uso</div>
+          <p class="settings-section-desc" data-i18n="usageDesc">Consumo diario y cuándo se reinicia el cupo.</p>
+          <div class="form-group">
+            <label class="form-label" data-i18n="usageUsed">Tokens de hoy</label>
+            <div id="usage-used" style="font-weight:650">—</div>
+            <div class="usage-bar"><span id="usage-bar-fill"></span></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="usageReset">Reinicio disponible</label>
+            <div id="usage-reset">00:00 UTC</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="byok">Clave Groq (BYOK)</label>
+            <input type="password" id="user-groq-key" class="form-input" placeholder="gsk_…" autocomplete="off">
+            <span class="settings-hint" data-i18n="byokHint">Solo se guarda en este navegador.</span>
+          </div>
+        </div>
+
+        <div id="pane-data" class="settings-pane">
+          <div class="settings-section-title" data-i18n="tabData">Controles de datos</div>
+          <p class="settings-section-desc" data-i18n="dataDesc">Exportar, vaciar o no persistir el workspace en este navegador.</p>
+          <div class="settings-card">
+            <label class="toggle-row"><span data-i18n="sessionOnly">No guardar chats al cerrar</span><input type="checkbox" id="set-ephemeral"></label>
+          </div>
+          <p class="settings-hint" data-i18n="sessionOnlyHint">Si está activo, el historial no se escribe en localStorage.</p>
+          <div class="settings-card">
+            <div class="settings-actions">
+              <button type="button" id="btn-export-all" class="topbar-action-btn" data-i18n="exportAll">Exportar chats y documentos</button>
+            </div>
+            <div class="settings-actions">
+              <button type="button" id="btn-clear-chats" class="topbar-action-btn" data-i18n="clearChats">Vaciar historial de chats</button>
+            </div>
+            <div class="settings-actions">
+              <button type="button" id="btn-clear-docs" class="topbar-action-btn" data-i18n="empty">Vaciar documentos</button>
+            </div>
+          </div>
+          <div class="settings-block-title" style="color:var(--red)" data-i18n="dangerZone">Zona peligrosa</div>
+          <div class="settings-card">
+            <div class="settings-kv">
+              <div>
+                <div class="settings-kv-label" data-i18n="deleteAccount">Eliminar cuenta</div>
+                <div class="settings-kv-sub" data-i18n="deleteConfirm">Esto borra tu cuenta en el servidor. ¿Continuar?</div>
+              </div>
+              <button type="button" id="delete-account-btn" class="topbar-action-btn btn-danger" data-i18n="deleteAccount">Eliminar cuenta</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">

@@ -1,0 +1,21 @@
+{
+  "name": "groq-discord-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "npm run build:web && wrangler deploy",
+    "build:web": "node scripts/extract-assets.mjs && node addThemes.cjs",
+    "register": "node register.js",
+    "pages:dev": "npm --prefix web run pages:dev",
+    "pages:build": "npm --prefix web run build"
+  },
+  "dependencies": {
+    "discord-interactions": "^4.1.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.123.0"
+  }
+}
