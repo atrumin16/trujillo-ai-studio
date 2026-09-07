@@ -14,6 +14,7 @@
     "dev": "wrangler dev",
     "deploy": "npm run build:web && wrangler deploy",
     "build:web": "node scripts/extract-assets.mjs && node addThemes.cjs",
+    "test": "node scripts/test-memory.mjs",
     "register": "node register.js",
     "pages:dev": "npm --prefix web run pages:dev",
     "pages:build": "npm --prefix web run build"
