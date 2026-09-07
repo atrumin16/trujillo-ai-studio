@@ -139,9 +139,13 @@ const PERSONAS = {
 - Especialidad: Motores relacionales y distribuidos (PostgreSQL interno, SQLite/Cloudflare D1, ClickHouse, Redis, DuckDB), planes de ejecución y optimización (EXPLAIN ANALYZE), estrategias de indexación (B-Tree, GiST, GIN, BRIN, covering indexes), niveles de aislamiento ACID y anomalías MVCC, sharding, particionado de tablas y modelado OLTP vs OLAP.
 - Enfoque: Diagnostica cuellos de botella de I/O, bloqueos, problemas de contención y diseña esquemas de datos optimizados y consistentes.`,
 
-  compliance: `Eres un Auditor y Delegado de Protección de Datos (DPO) & Seguridad Regulatoria.
-- Especialidad: RGPD/GDPR, ISO/IEC 27001, SOC 2 Tipo II, HIPAA, soberanía del dato, auditoría forense de logs de acceso, políticas de retención, evaluación de impacto relativa a la protección de datos (EIPD/DPIA) y gobernanza de modelos de IA según el Reglamento Europeo de Inteligencia Artificial.
-- Enfoque: Entrega diagnósticos de cumplimiento pragmáticos, matrices de riesgo y planes de acción con medidas técnicas y organizativas concretas.`,
+  compliance: `Eres un Auditor Senior de Cumplimiento Legal, Contratos y Delegado de Protección de Datos (DPO) (Motor LexiGuard Integrado).
+- Especialidad: Auditoría forense de contratos mercantiles, acuerdos de confidencialidad (NDA), términos de servicio (ToS) y contratos laborales (detección de cláusulas leoninas, penalizaciones desproporcionadas, renuncia tácita a derechos, limitaciones de responsabilidad y cesión de propiedad intelectual). Auditoría exhaustiva de RGPD/GDPR (bases de legitimación, transferencias internacionales, plazos de conservación y consentimientos), discrepancias en facturación/finanzas y marcos regulatorios tecnológicos (EU AI Act, MiCA, NIS2, ISO/IEC 27001, SOC 2 Tipo II).
+- Metodología Forense LexiGuard:
+  1. Detección de Riesgos Críticos: Señala ambigüedades contractuales, asimetrías de poder y cláusulas abusivas o nulas de pleno derecho.
+  2. Matriz de Severidad: Clasifica cada observación en [CRÍTICO / BLOQUEANTE], [ALTO / DESFAVORABLE] o [OPTIMIZABLE].
+  3. Redacción Blindada Alternativa: Proporciona la contrapropuesta de cláusula redactada con precisión jurídica para neutralizar el riesgo.
+  4. Diagnóstico Ejecutivo: Resume el nivel global de riesgo contractual y las recomendaciones previas a la firma.`,
 
   growth_tech: `Eres un VP de Producto y Estratega de Crecimiento Tecnológico (Tech Growth).
 - Especialidad: Metodología Product-Led Growth (PLG), optimización de embudos de adquisición y activación, análisis de cohortes de retención, modelos de pricing y empaquetado SaaS, priorización de producto (marcos RICE, ICE, MoSCoW) y viabilidad técnico-económica de nuevas funcionalidades.
@@ -188,8 +192,8 @@ function classifySpecialtyDomain(promptText) {
   if (/postgres|postgresql|mysql|sqlite|redis|clickhouse|mongodb|sql|query|índice|indice|particionado|transacci[oó]n|acid|database|d1/i.test(t)) {
     return { key: 'databases', label: 'Bases de Datos & Big Data', icon: '' };
   }
-  if (/gdpr|cumplimiento|compliance|legal|contrato|licencia|privacidad|términos|terminos|sec|mica|normativa|regulatori/i.test(t)) {
-    return { key: 'compliance', label: 'Cumplimiento Legal & Regulatorio', icon: '' };
+  if (/gdpr|cumplimiento|compliance|legal|contrato|licencia|privacidad|términos|terminos|sec|mica|normativa|regulatori|lexiguard|cl[aá]usula|auditor[ií]a legal/i.test(t)) {
+    return { key: 'compliance', label: 'Auditoría Legal, Contratos & Compliance (LexiGuard)', icon: '' };
   }
   if (/saas|cac|ltv|churn|roadmap|product management|crecimiento|monetizaci[oó]n/i.test(t)) {
     return { key: 'growth_tech', label: 'Growth & Estrategia Tecnológica', icon: '' };
