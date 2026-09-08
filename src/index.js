@@ -37,8 +37,8 @@ const APP_FROM_EMAIL = 'no-reply@trujillomingorance.com';
 const APP_SUPPORT_EMAIL = 'alberto@trujillomingorance.com';
 const APP_FROM_NAME = 'Trujillo AI';
 const APP_ORIGIN = 'https://ai.trujillomingorance.com';
-const GOOGLE_CLIENT_ID = '';
-const X_OAUTH_CLIENT_ID = '';
+const GOOGLE_CLIENT_ID = '161745150528-5pb84k9upvamvlvnc7lg6nr1ku74vc4a.apps.googleusercontent.com';
+const X_OAUTH_CLIENT_ID = 'NF94WVVIT1dzSXZNaTJuYjRXSEc6MTpjaQ';
 const X_OAUTH_CLIENT_SECRET = '';
 
 const AVAILABLE_OPEN_MODELS = [
@@ -930,22 +930,31 @@ export default {
 
         const xClientId = env.X_CLIENT_ID || X_OAUTH_CLIENT_ID;
         const xClientSecret = env.X_CLIENT_SECRET || X_OAUTH_CLIENT_SECRET;
-        const basicAuth = btoa(`${xClientId}:${xClientSecret}`);
+        
+        const tokenHeaders = {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        };
+        const tokenParams = {
+          code,
+          grant_type: 'authorization_code',
+          client_id: xClientId,
+          redirect_uri: clientRedirectUri,
+          code_verifier: 'challenge'
+        };
+
+        if (xClientSecret) {
+          tokenHeaders['Authorization'] = `Basic ${btoa(`${xClientId}:${xClientSecret}`)}`;
+        }
+
         const tokenRes = await fetch('https://api.twitter.com/2/oauth2/token', {
           method: 'POST',
-          headers: {
-            Authorization: `Basic ${basicAuth}`,
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          body: new URLSearchParams({
-            code,
-            grant_type: 'authorization_code',
-            redirect_uri: clientRedirectUri,
-            code_verifier: 'challenge'
-          }).toString()
+          headers: tokenHeaders,
+          body: new URLSearchParams(tokenParams).toString()
         });
 
         if (!tokenRes.ok) {
+          const errDetail = await tokenRes.text().catch(() => '');
+          console.error('Twitter OAuth Token Error:', tokenRes.status, errDetail);
           return new Response(JSON.stringify({ error: 'No se pudo completar el acceso con X. Vuelve a intentarlo.' }), { status: 401, headers: corsHeaders });
         }
 
@@ -3570,6 +3579,7 @@ function isAllowedOAuthRedirect(uri) {
   try {
     const u = new URL(uri);
     const hostOk = u.hostname === 'ai.trujillomingorance.com'
+      || u.hostname === 'rewrite.trujillomingorance.com'
       || u.hostname === 'localhost'
       || u.hostname === '127.0.0.1';
     const pathOk = u.pathname === '/login' || u.pathname === '/' || u.pathname === '/api/auth/x/callback';
