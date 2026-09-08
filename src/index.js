@@ -1533,6 +1533,8 @@ function isOwnerUser(userIdentifier, env = null) {
   return false;
 }
 
+const USER_DAILY_TOKEN_LIMIT = 50000;
+
 async function checkAndConsumeGlobalTokens(env, userIdentifier, estimatedTokens = 350) {
   if (isOwnerUser(userIdentifier, env)) {
     return { allowed: true, current: 0, limit: 'unlimited', isOwner: true };
