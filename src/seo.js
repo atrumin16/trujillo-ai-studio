@@ -79,7 +79,7 @@ export function jsonLdFor(path = '/') {
         url: ORIGIN,
         logo: ORIGIN + '/avatar.png',
         email: 'alberto@trujillomingorance.com',
-        sameAs: ['https://trujillomingorance.com', 'https://github.com/atrumin16', 'https://x.com/atrumin16'],
+        sameAs: ['https://trujillomingorance.com', 'https://rewrite.trujillomingorance.com', 'https://github.com/atrumin16', 'https://x.com/atrumin16'],
       },
       {
         '@type': 'WebSite',
@@ -104,6 +104,18 @@ export function jsonLdFor(path = '/') {
         image: ORIGIN + '/avatar.png',
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
         description: COPY.en.homeDesc,
+        publisher: { '@id': ORIGIN + '/#organization' },
+      },
+      {
+        '@type': 'SoftwareApplication',
+        '@id': 'https://rewrite.trujillomingorance.com/#app',
+        name: 'Rewrite AI — Humanización 0% IA & Corrector',
+        applicationCategory: 'TextEditor',
+        operatingSystem: 'Web',
+        url: 'https://rewrite.trujillomingorance.com',
+        image: ORIGIN + '/avatar.png',
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+        description: 'Motor de humanización y reescritura de texto 0% IA y corrección editorial indetectable.',
         publisher: { '@id': ORIGIN + '/#organization' },
       },
       {
@@ -175,6 +187,7 @@ export function llmsTxt() {
 
 ## Product
 - [Workspace](${ORIGIN}/): primary chat
+- [Rewrite AI & Corrector 0% IA](https://rewrite.trujillomingorance.com/): Stealth AI text humanizer & professional text corrector
 - [Product](${ORIGIN}/features)
 - [Models](${ORIGIN}/models)
 - [Documentation](${ORIGIN}/docs)

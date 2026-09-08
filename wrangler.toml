@@ -1,12 +1,7 @@
-name = "trujillo-ai-studio"
+name = "groq-discord-bot"
 main = "src/index.js"
 compatibility_date = "2026-08-16"
 workers_dev = true
-
-# Optional: Add your custom domain routes in Cloudflare
-# routes = [
-#   { pattern = "ai.yourdomain.com", custom_domain = true }
-# ]
 
 [assets]
 directory = "./public"
@@ -25,12 +20,10 @@ head_sampling_rate = 0.1
 
 [vars]
 GROQ_MODEL = "openai/gpt-oss-120b"
-SITE_DOMAIN = "ai.example.com"
-OWNER_EMAILS = "admin@example.com"
-OWNER_DISCORD_IDS = ""
-DISCORD_APPLICATION_ID = "YOUR_DISCORD_APPLICATION_ID"
-DISCORD_PUBLIC_KEY = "YOUR_DISCORD_PUBLIC_KEY"
+SITE_DOMAIN = "ai.trujillomingorance.com"
+DISCORD_APPLICATION_ID = "1538306837240225842"
+DISCORD_PUBLIC_KEY = "a4295ee257e001d2b9a36e8f1bdc1c83ee61eb4176e07ede3eb24b6416f0dda0"
 
 [[kv_namespaces]]
 binding = "BOT_MEMORY"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "bab271312bfa4c84a483c6ee7b7a1756"

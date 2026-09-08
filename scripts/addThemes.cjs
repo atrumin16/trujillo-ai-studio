@@ -3,46 +3,59 @@ const fs = require('fs');
 let css = fs.readFileSync('public/assets/app.css', 'utf8');
 
 // Update color-scheme
-css = css.replace(/html\[data-theme="sepia"\] \{ color-scheme: light; \}/, 'html[data-theme="sepia"], html[data-theme="rose"], html[data-theme="lavender"] { color-scheme: light; }');
+if (!css.includes('html[data-theme="rose"]')) {
+  css = css.replace(
+    /html\[data-theme="light"\], html\[data-theme="paper"\] \{ color-scheme: light; \}/,
+    'html[data-theme="light"], html[data-theme="paper"], html[data-theme="rose"], html[data-theme="lavender"] { color-scheme: light; }'
+  );
+}
 
-// Add 7 themes before data-font
-const newThemes = `
-    html[data-theme="hacker"] { --bg: #000; --sidebar: #050505; --elev: #0a0a0a; --elev-2: #121212; --card: #080808; --input: #000; --invert: #0f0; --invert-fg: #000; --line: rgba(0,255,0,0.2); --line-2: rgba(0,255,0,0.3); --text: #0f0; --muted: #0a0; --dim: #050; }
-    html[data-theme="cyberpunk"] { --bg: #120421; --sidebar: #0c0216; --elev: #1f0b38; --elev-2: #2d1354; --card: #160629; --input: #0c0216; --invert: #fcee0a; --invert-fg: #120421; --line: rgba(255,0,127,0.3); --line-2: rgba(255,0,127,0.5); --text: #0ff; --muted: #ff007f; --dim: #8b008b; }
-    html[data-theme="sunset"] { --bg: #2d1b2e; --sidebar: #1f1120; --elev: #3d243e; --elev-2: #4e2e4f; --card: #251426; --input: #1f1120; --invert: #f69d3c; --invert-fg: #2d1b2e; --line: rgba(246,157,60,0.2); --line-2: rgba(246,157,60,0.3); --text: #f69d3c; --muted: #b86b25; --dim: #7a4618; }
-    html[data-theme="ocean"] { --bg: #001f3f; --sidebar: #00152b; --elev: #002b5e; --elev-2: #003a7a; --card: #001a35; --input: #00152b; --invert: #39cccc; --invert-fg: #001f3f; --line: rgba(57,204,204,0.2); --line-2: rgba(57,204,204,0.3); --text: #39cccc; --muted: #2a9b9b; --dim: #1e6c6c; }
-    html[data-theme="forest"] { --bg: #0f291e; --sidebar: #0a1c14; --elev: #15392a; --elev-2: #1c4b37; --card: #0c2118; --input: #0a1c14; --invert: #8fbc8f; --invert-fg: #0f291e; --line: rgba(143,188,143,0.2); --line-2: rgba(143,188,143,0.3); --text: #8fbc8f; --muted: #5e8a5e; --dim: #3d593d; }
-    html[data-theme="rose"] { --bg: #fff0f5; --sidebar: #ffe4e1; --elev: #ffe4e1; --elev-2: #ffb6c1; --card: #fff0f5; --input: #ffe4e1; --invert: #db7093; --invert-fg: #fff0f5; --line: rgba(219,112,147,0.15); --line-2: rgba(219,112,147,0.25); --text: #db7093; --muted: #c71585; --dim: #8b0a50; }
-    html[data-theme="lavender"] { --bg: #e6e6fa; --sidebar: #d8bfd8; --elev: #e6e6fa; --elev-2: #dda0dd; --card: #e6e6fa; --input: #d8bfd8; --invert: #663399; --invert-fg: #e6e6fa; --line: rgba(102,51,153,0.15); --line-2: rgba(102,51,153,0.25); --text: #663399; --muted: #8a2be2; --dim: #4b0082; }
+// Add 7 themes before data-font if not present
+if (!css.includes('html[data-theme="hacker"]')) {
+  const newThemes = `
+    html[data-theme="hacker"] { --bg: #000000; --sidebar: #040c04; --elev: #081a08; --elev-2: #0f2b0f; --card: #061406; --input: #020602; --invert: #22c55e; --invert-fg: #000000; --line: rgba(34,197,94,0.2); --line-2: rgba(34,197,94,0.35); --text: #4ade80; --muted: #22c55e; --dim: #15803d; }
+    html[data-theme="cyberpunk"] { --bg: #0d021a; --sidebar: #07010e; --elev: #1a0533; --elev-2: #27084d; --card: #130324; --input: #07010e; --invert: #fcee0a; --invert-fg: #0d021a; --line: rgba(255,0,127,0.25); --line-2: rgba(255,0,127,0.4); --text: #00ffff; --muted: #ff007f; --dim: #a200ff; }
+    html[data-theme="sunset"] { --bg: #1f101d; --sidebar: #140a13; --elev: #30192d; --elev-2: #43223e; --card: #251323; --input: #140a13; --invert: #fb923c; --invert-fg: #1f101d; --line: rgba(251,146,60,0.18); --line-2: rgba(251,146,60,0.3); --text: #ffedd5; --muted: #fdba74; --dim: #ea580c; }
+    html[data-theme="ocean"] { --bg: #061325; --sidebar: #030b17; --elev: #0c2340; --elev-2: #11325b; --card: #081a32; --input: #030b17; --invert: #38bdf8; --invert-fg: #061325; --line: rgba(56,189,248,0.15); --line-2: rgba(56,189,248,0.25); --text: #f0f9ff; --muted: #7dd3fc; --dim: #0284c7; }
+    html[data-theme="forest"] { --bg: #07130e; --sidebar: #040c08; --elev: #0e241b; --elev-2: #163628; --card: #0a1913; --input: #040c08; --invert: #22c55e; --invert-fg: #07130e; --line: rgba(34,197,94,0.15); --line-2: rgba(34,197,94,0.25); --text: #ecfdf5; --muted: #6ee7b7; --dim: #10b981; }
+    html[data-theme="rose"] { --bg: #fff1f2; --sidebar: #ffe4e6; --elev: #ffffff; --elev-2: #fecdd3; --card: #ffffff; --input: #ffe4e6; --invert: #e11d48; --invert-fg: #ffffff; --line: rgba(225,29,72,0.12); --line-2: rgba(225,29,72,0.22); --text: #4c0519; --muted: #9f1239; --dim: #be123c; }
+    html[data-theme="lavender"] { --bg: #f8f6fc; --sidebar: #f3e8ff; --elev: #ffffff; --elev-2: #e9d5ff; --card: #ffffff; --input: #f3e8ff; --invert: #7e22ce; --invert-fg: #ffffff; --line: rgba(126,34,206,0.12); --line-2: rgba(126,34,206,0.22); --text: #3b0764; --muted: #7e22ce; --dim: #a855f7; }
 `;
-css = css.replace(/    html\[data-font="sm"\]/, newThemes + '    html[data-font="sm"]');
+  css = css.replace(/    html\[data-font="sm"\]/, newThemes + '    html[data-font="sm"]');
+}
 
-// Add swatches
-const newSwatches = `
-    .theme-swatch[data-swatch="hacker"] { --sw-bg: #000; --sw-side: #050505; }
-    .theme-swatch[data-swatch="cyberpunk"] { --sw-bg: #120421; --sw-side: #0c0216; }
-    .theme-swatch[data-swatch="sunset"] { --sw-bg: #2d1b2e; --sw-side: #1f1120; }
-    .theme-swatch[data-swatch="ocean"] { --sw-bg: #001f3f; --sw-side: #00152b; }
-    .theme-swatch[data-swatch="forest"] { --sw-bg: #0f291e; --sw-side: #0a1c14; }
-    .theme-swatch[data-swatch="rose"] { --sw-bg: #fff0f5; --sw-side: #ffe4e1; }
-    .theme-swatch[data-swatch="lavender"] { --sw-bg: #e6e6fa; --sw-side: #d8bfd8; }
+// Add swatches if not present
+if (!css.includes('.theme-swatch[data-swatch="hacker"]')) {
+  const newSwatches = `
+    .theme-swatch[data-swatch="hacker"] { --sw-bg: #000000; --sw-side: #081a08; }
+    .theme-swatch[data-swatch="cyberpunk"] { --sw-bg: #0d021a; --sw-side: #ff007f; }
+    .theme-swatch[data-swatch="sunset"] { --sw-bg: #1f101d; --sw-side: #ea580c; }
+    .theme-swatch[data-swatch="ocean"] { --sw-bg: #061325; --sw-side: #0284c7; }
+    .theme-swatch[data-swatch="forest"] { --sw-bg: #07130e; --sw-side: #10b981; }
+    .theme-swatch[data-swatch="rose"] { --sw-bg: #fff1f2; --sw-side: #fecdd3; }
+    .theme-swatch[data-swatch="lavender"] { --sw-bg: #f8f6fc; --sw-side: #e9d5ff; }
 `;
-css = css.replace(/    \.accent-row/, newSwatches + '    .accent-row');
+  css = css.replace(/    \.accent-row/, newSwatches + '    .accent-row');
+}
 
 fs.writeFileSync('public/assets/app.css', css);
 
 let appJs = fs.readFileSync('public/assets/app.js', 'utf8');
 
-// Add the 7 themes to THEME_COLORS
-appJs = appJs.replace(
-  "sepia: '#fdf6e3' };",
-  "sepia: '#fdf6e3', hacker: '#000000', cyberpunk: '#120421', sunset: '#2d1b2e', ocean: '#001f3f', forest: '#0f291e', rose: '#fff0f5', lavender: '#e6e6fa' };"
-);
+// Add the 7 themes to THEME_COLORS if not present
+if (!appJs.includes("hacker: '#000000'")) {
+  appJs = appJs.replace(
+    "paper: '#f4efe6' };",
+    "paper: '#f4efe6', hacker: '#000000', cyberpunk: '#0d021a', sunset: '#1f101d', ocean: '#061325', forest: '#07130e', rose: '#fff1f2', lavender: '#f8f6fc' };"
+  );
+}
 
-// Add the 7 buttons to the DOM
-const endMarker = '<button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"system\\">';
-const newButtons = `              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"hacker\\"><span class=\\"theme-swatch\\" data-swatch=\\"hacker\\"></span><span data-i18n=\\"themeHacker\\">Hacker</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"cyberpunk\\"><span class=\\"theme-swatch\\" data-swatch=\\"cyberpunk\\"></span><span data-i18n=\\"themeCyberpunk\\">Cyberpunk</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"sunset\\"><span class=\\"theme-swatch\\" data-swatch=\\"sunset\\"></span><span data-i18n=\\"themeSunset\\">Sunset</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"ocean\\"><span class=\\"theme-swatch\\" data-swatch=\\"ocean\\"></span><span data-i18n=\\"themeOcean\\">Ocean</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"forest\\"><span class=\\"theme-swatch\\" data-swatch=\\"forest\\"></span><span data-i18n=\\"themeForest\\">Forest</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"rose\\"><span class=\\"theme-swatch\\" data-swatch=\\"rose\\"></span><span data-i18n=\\"themeRose\\">Rose</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"lavender\\"><span class=\\"theme-swatch\\" data-swatch=\\"lavender\\"></span><span data-i18n=\\"themeLavender\\">Lavender</span></button>\\n              `;
-appJs = appJs.replace(endMarker, newButtons + endMarker);
+// Add the 7 buttons to the DOM without data-i18n prefix if not present
+if (!appJs.includes('data-value=\\"hacker\\"')) {
+  const endMarker = '<button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"system\\">';
+  const newButtons = `              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"hacker\\"><span class=\\"theme-swatch\\" data-swatch=\\"hacker\\"></span><span>Hacker</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"cyberpunk\\"><span class=\\"theme-swatch\\" data-swatch=\\"cyberpunk\\"></span><span>Cyberpunk</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"sunset\\"><span class=\\"theme-swatch\\" data-swatch=\\"sunset\\"></span><span>Sunset</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"ocean\\"><span class=\\"theme-swatch\\" data-swatch=\\"ocean\\"></span><span>Ocean</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"forest\\"><span class=\\"theme-swatch\\" data-swatch=\\"forest\\"></span><span>Forest</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"rose\\"><span class=\\"theme-swatch\\" data-swatch=\\"rose\\"></span><span>Rose</span></button>\\n              <button type=\\"button\\" class=\\"theme-card\\" data-pref=\\"ta_theme\\" data-value=\\"lavender\\"><span class=\\"theme-swatch\\" data-swatch=\\"lavender\\"></span><span>Lavender</span></button>\\n              `;
+  appJs = appJs.replace(endMarker, newButtons + endMarker);
+}
 
 fs.writeFileSync('public/assets/app.js', appJs);
 console.log('Themes added!');

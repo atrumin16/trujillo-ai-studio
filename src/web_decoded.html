@@ -100,7 +100,16 @@
       --muted: #57534e;
       --dim: #78716c;
     }
-    html[data-theme="light"], html[data-theme="paper"] { color-scheme: light; }
+    html[data-theme="light"], html[data-theme="paper"], html[data-theme="rose"], html[data-theme="lavender"] { color-scheme: light; }
+
+    html[data-theme="hacker"] { --bg: #000000; --sidebar: #040c04; --elev: #081a08; --elev-2: #0f2b0f; --card: #061406; --input: #020602; --invert: #22c55e; --invert-fg: #000000; --line: rgba(34,197,94,0.2); --line-2: rgba(34,197,94,0.35); --text: #4ade80; --muted: #22c55e; --dim: #15803d; }
+    html[data-theme="cyberpunk"] { --bg: #0d021a; --sidebar: #07010e; --elev: #1a0533; --elev-2: #27084d; --card: #130324; --input: #07010e; --invert: #fcee0a; --invert-fg: #0d021a; --line: rgba(255,0,127,0.25); --line-2: rgba(255,0,127,0.4); --text: #00ffff; --muted: #ff007f; --dim: #a200ff; }
+    html[data-theme="sunset"] { --bg: #1f101d; --sidebar: #140a13; --elev: #30192d; --elev-2: #43223e; --card: #251323; --input: #140a13; --invert: #fb923c; --invert-fg: #1f101d; --line: rgba(251,146,60,0.18); --line-2: rgba(251,146,60,0.3); --text: #ffedd5; --muted: #fdba74; --dim: #ea580c; }
+    html[data-theme="ocean"] { --bg: #061325; --sidebar: #030b17; --elev: #0c2340; --elev-2: #11325b; --card: #081a32; --input: #030b17; --invert: #38bdf8; --invert-fg: #061325; --line: rgba(56,189,248,0.15); --line-2: rgba(56,189,248,0.25); --text: #f0f9ff; --muted: #7dd3fc; --dim: #0284c7; }
+    html[data-theme="forest"] { --bg: #07130e; --sidebar: #040c08; --elev: #0e241b; --elev-2: #163628; --card: #0a1913; --input: #040c08; --invert: #22c55e; --invert-fg: #07130e; --line: rgba(34,197,94,0.15); --line-2: rgba(34,197,94,0.25); --text: #ecfdf5; --muted: #6ee7b7; --dim: #10b981; }
+    html[data-theme="rose"] { --bg: #fff1f2; --sidebar: #ffe4e6; --elev: #ffffff; --elev-2: #fecdd3; --card: #ffffff; --input: #ffe4e6; --invert: #e11d48; --invert-fg: #ffffff; --line: rgba(225,29,72,0.12); --line-2: rgba(225,29,72,0.22); --text: #4c0519; --muted: #9f1239; --dim: #be123c; }
+    html[data-theme="lavender"] { --bg: #f8f6fc; --sidebar: #f3e8ff; --elev: #ffffff; --elev-2: #e9d5ff; --card: #ffffff; --input: #f3e8ff; --invert: #7e22ce; --invert-fg: #ffffff; --line: rgba(126,34,206,0.12); --line-2: rgba(126,34,206,0.22); --text: #3b0764; --muted: #7e22ce; --dim: #a855f7; }
+
     html[data-font="sm"] { font-size: 14px; }
     html[data-font="lg"] { font-size: 17.5px; }
     html[data-typeface="serif"] { --font: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
@@ -374,6 +383,13 @@
     .theme-swatch[data-swatch="navy"] { --sw-bg: #0b1220; --sw-side: #152036; }
     .theme-swatch[data-swatch="light"] { --sw-bg: #f4f4f5; --sw-side: #ececef; }
     .theme-swatch[data-swatch="paper"] { --sw-bg: #f4efe6; --sw-side: #ebe4d6; }
+    .theme-swatch[data-swatch="hacker"] { --sw-bg: #000000; --sw-side: #081a08; }
+    .theme-swatch[data-swatch="cyberpunk"] { --sw-bg: #0d021a; --sw-side: #ff007f; }
+    .theme-swatch[data-swatch="sunset"] { --sw-bg: #1f101d; --sw-side: #ea580c; }
+    .theme-swatch[data-swatch="ocean"] { --sw-bg: #061325; --sw-side: #0284c7; }
+    .theme-swatch[data-swatch="forest"] { --sw-bg: #07130e; --sw-side: #10b981; }
+    .theme-swatch[data-swatch="rose"] { --sw-bg: #fff1f2; --sw-side: #fecdd3; }
+    .theme-swatch[data-swatch="lavender"] { --sw-bg: #f8f6fc; --sw-side: #e9d5ff; }
     .theme-swatch[data-swatch="system"] { --sw-bg: #71717a; --sw-side: #111; }
     .accent-row { display: flex; flex-wrap: wrap; gap: 8px; }
     .accent-dot {
@@ -695,6 +711,13 @@
     </div>
     <div class="history-list" id="history-list"></div>
     <div class="sb-foot">
+      <a href="https://rewrite.trujillomingorance.com" target="_blank" rel="noopener" class="sb-link" style="display:flex;align-items:center;justify-content:space-between;text-decoration:none;">
+        <span style="display:flex;align-items:center;gap:7px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Rewrite AI (0% IA)</span>
+        </span>
+        <span style="font-size:0.62rem;background:rgba(56,189,248,0.15);color:var(--blue);padding:1px 6px;border-radius:4px;font-weight:700;">NUEVO</span>
+      </a>
       <button type="button" id="open-connectors-btn" class="sb-link" data-i18n="connectors">Conectores</button>
       <button type="button" id="open-settings-btn" class="sb-link" data-i18n="settings" data-open-settings="pane-general">Ajustes</button>
       <a href="/docs" class="sb-link" data-i18n="docsLink">Documentación</a>
@@ -1002,6 +1025,13 @@
               <button type="button" class="theme-card" data-pref="ta_theme" data-value="navy"><span class="theme-swatch" data-swatch="navy"></span><span data-i18n="themeNavy">Marino</span></button>
               <button type="button" class="theme-card" data-pref="ta_theme" data-value="light"><span class="theme-swatch" data-swatch="light"></span><span data-i18n="themeLight">Claro</span></button>
               <button type="button" class="theme-card" data-pref="ta_theme" data-value="paper"><span class="theme-swatch" data-swatch="paper"></span><span data-i18n="themePaper">Papel</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="hacker"><span class="theme-swatch" data-swatch="hacker"></span><span>Hacker</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="cyberpunk"><span class="theme-swatch" data-swatch="cyberpunk"></span><span>Cyberpunk</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="sunset"><span class="theme-swatch" data-swatch="sunset"></span><span>Sunset</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="ocean"><span class="theme-swatch" data-swatch="ocean"></span><span>Ocean</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="forest"><span class="theme-swatch" data-swatch="forest"></span><span>Forest</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="rose"><span class="theme-swatch" data-swatch="rose"></span><span>Rose</span></button>
+              <button type="button" class="theme-card" data-pref="ta_theme" data-value="lavender"><span class="theme-swatch" data-swatch="lavender"></span><span>Lavender</span></button>
               <button type="button" class="theme-card" data-pref="ta_theme" data-value="system"><span class="theme-swatch" data-swatch="system"></span><span data-i18n="themeSystem">Sistema</span></button>
             </div>
           </div>
@@ -1358,7 +1388,7 @@
     concise: 'Responde en el mínimo de palabras útil.'
   };
   function t(k) { return (window.TA && TA.t) ? TA.t(k) : k; }
-  var THEME_COLORS = { dark: '#000000', gray: '#18181b', dim: '#0d1117', navy: '#0b1220', light: '#f4f4f5', paper: '#f4efe6' };
+  var THEME_COLORS = { dark: '#000000', gray: '#18181b', dim: '#0d1117', navy: '#0b1220', light: '#f4f4f5', paper: '#f4efe6', hacker: '#000000', cyberpunk: '#0d021a', sunset: '#1f101d', ocean: '#061325', forest: '#07130e', rose: '#fff1f2', lavender: '#f8f6fc' };
   var ACCENT_OK = { '#38bdf8': 1, '#a1a1aa': 1, '#34d399': 1, '#2dd4bf': 1, '#818cf8': 1, '#a78bfa': 1, '#f59e0b': 1, '#fb7185': 1 };
   function applyAppearance() {
     var theme = localStorage.getItem('ta_theme') || 'dark';
@@ -2350,6 +2380,7 @@
       { id: 'export', label: t('exportChat'), run: exportChat },
       { id: 'search', label: t('searchPh'), run: function() { var s = document.getElementById('history-search'); if (s) { toggleSidebar(true); s.focus(); } } },
       { id: 'docs', label: t('docsLink'), run: function() { window.location.href = '/docs'; } },
+      { id: 'rewrite', label: 'Rewrite AI — Humanización 0% IA & Corrector', run: function() { window.open('https://rewrite.trujillomingorance.com', '_blank'); } },
       { id: 'ideas', label: t('ideas'), run: function() { openSettingsModal('pane-ideas'); } }
     ];
   }
