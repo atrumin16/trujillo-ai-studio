@@ -233,7 +233,8 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    
+    const originalPath = url.pathname;
+
     let pathLang = '';
     const pathParts = url.pathname.split('/');
     if (pathParts[1]) {
@@ -314,7 +315,7 @@ export default {
     if (!IS_AI_HOST && url.hostname.endsWith('trujillomingorance.com')) {
       // Unmapped subdomain: serve the gateway 404 and its CSS/JS from the same origin.
       const GATEWAY = 'https://domain-root-2r5.pages.dev';
-      const path = url.pathname;
+      const path = originalPath;
       const isNfAsset = path.startsWith('/css/') || path.startsWith('/js/') || path === '/avatar.png' || path === '/favicon.ico';
       try {
         if (isNfAsset) {
