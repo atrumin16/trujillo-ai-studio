@@ -1,3 +1,5 @@
+import { LIBRARY_PREFIX } from './publish.js';
+
 const ORIGIN = 'https://ai.trujillomingorance.com';
 
 function esc(s) {
@@ -114,18 +116,28 @@ export function renderMarkdown(md) {
 const SHELL_CSS = `
 html,body{margin:0;height:100%;background:#080c14;color:#f8fafc;font-family:Inter,ui-sans-serif,system-ui,sans-serif}
 body{display:flex;flex-direction:column}
-.bar{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(8,12,20,.92);backdrop-filter:blur(12px)}
-.brand{display:flex;align-items:center;gap:8px;color:#f8fafc;text-decoration:none;font-weight:650;letter-spacing:-.03em;font-size:13px}
+.bar{min-height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(8,12,20,.92);backdrop-filter:blur(12px)}
+.brand{display:flex;align-items:center;gap:8px;color:#f8fafc;text-decoration:none;font-weight:650;letter-spacing:-.03em;font-size:13px;flex-shrink:0}
 .brand img{width:22px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,.12)}
-.bar-title{font-size:13px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}
+.bar-title{font-size:13px;color:#94a3b8;line-height:1.3;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;flex:1;min-width:0}
 .bar-actions{display:flex;gap:8px;align-items:center}
 .btn{background:transparent;border:1px solid rgba(255,255,255,.12);color:#cbd5e1;border-radius:8px;padding:6px 10px;font-size:12px;text-decoration:none;cursor:pointer;font-family:inherit}
 .btn:hover{color:#fff;border-color:rgba(255,255,255,.28)}
-.poster{flex-shrink:0;display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(12,18,30,.92)}
+.poster{flex-shrink:0;display:flex;flex-direction:column;gap:10px;padding:14px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(12,18,30,.92)}
+.poster-by{display:flex;align-items:center;gap:12px}
+.page-title{margin:0;font-size:1.28rem;font-weight:700;line-height:1.3;color:#fff;letter-spacing:-.03em;white-space:normal;overflow:visible;word-break:break-word}
 .by-logo{width:40px;height:40px;border-radius:12px;object-fit:cover;border:1px solid rgba(255,255,255,.14);background:#000;flex-shrink:0}
 .by-meta{min-width:0}
 .by-name{font-size:14px;font-weight:650;color:#fff;letter-spacing:-.02em}
 .by-handle{font-size:12px;color:#7dd3fc;margin-top:2px}
+.extras{flex-shrink:0;border-top:1px solid rgba(255,255,255,.08);padding:18px 16px 28px;background:#080c14}
+.extras-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;max-width:1100px;margin:0 auto}
+.extras h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin:0 0 8px}
+.extras a,.extras p{font-size:13px;color:#cbd5e1;text-decoration:none}
+.extras a:hover{color:#7dd3fc}
+.widget{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px;background:rgba(15,22,36,.7)}
+.widget img{max-width:100%;border-radius:8px;display:block}
+.widget iframe{width:100%;min-height:180px;border:0;border-radius:8px;background:#fff}
 .by-handle a{color:inherit;text-decoration:none}
 .by-handle a:hover{text-decoration:underline}
 .stage{flex:1;min-height:0;position:relative;background:#080c14}
@@ -152,7 +164,7 @@ body{display:flex;flex-direction:column}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:28px 20px 60px;max-width:1100px;margin:0 auto;width:100%;box-sizing:border-box}
 .card{display:block;text-decoration:none;color:inherit;background:rgba(15,22,36,.78);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px}
 .card:hover{border-color:rgba(255,255,255,.18)}
-.card h2{margin:0 0 8px;font-size:1rem;color:#fff}
+.card h2{margin:0 0 8px;font-size:1rem;color:#fff;line-height:1.35;white-space:normal}
 .card p{margin:0;font-size:12px;color:#64748b;font-family:ui-monospace,monospace}
 .card-by{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .card-by img{width:22px;height:22px;border-radius:7px;object-fit:cover;border:1px solid rgba(255,255,255,.12)}
@@ -164,14 +176,18 @@ function bylineHtml(item) {
   if (!handle && !(item && item.authorName)) return '';
   const name = (item && item.authorName) || handle;
   const pic = (item && item.authorPicture) || '/avatar.png';
-  const dest = (item && item.dest) === 'guide' ? 'Guides' : 'Artifact';
-  const board = handle ? `/artifact/@${esc(handle)}` : '/artifact';
+  const dest = (item && item.dest) === 'guide' ? 'Guides' : 'Library';
+  const board = handle ? `${LIBRARY_PREFIX}/@${esc(handle)}` : LIBRARY_PREFIX;
+  const title = (item && item.title) || '';
   return `<div class="poster">
-  <img class="by-logo" src="${esc(pic)}" alt="" width="40" height="40">
-  <div class="by-meta">
-    <div class="by-name">${esc(name)}</div>
-    <div class="by-handle">by ${handle ? `<a href="${board}">@${esc(handle)}</a>` : 'autor'} · ${dest}</div>
+  <div class="poster-by">
+    <img class="by-logo" src="${esc(pic)}" alt="" width="40" height="40">
+    <div class="by-meta">
+      <div class="by-name">${esc(name)}</div>
+      <div class="by-handle">by ${handle ? `<a href="${board}">@${esc(handle)}</a>` : 'autor'} · ${dest}</div>
+    </div>
   </div>
+  ${title ? `<h1 class="page-title">${esc(title)}</h1>` : ''}
 </div>`;
 }
 
@@ -181,7 +197,7 @@ function wrap(title, inner, extraBar, poster) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)} · Artifact · Trujillo AI</title>
+<title>${esc(title)} · Library · Trujillo AI</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#080c14">
 <link rel="icon" href="/avatar.png">
@@ -200,8 +216,50 @@ ${inner}
 }
 
 function itemHref(it) {
-  if (it.handle && it.slug) return '/artifact/@' + encodeURIComponent(it.handle) + '/' + encodeURIComponent(it.slug);
-  return '/artifact/' + encodeURIComponent(it.slug);
+  if (it.handle && it.slug) return LIBRARY_PREFIX + '/@' + encodeURIComponent(it.handle) + '/' + encodeURIComponent(it.slug);
+  return LIBRARY_PREFIX + '/' + encodeURIComponent(it.slug);
+}
+
+function extrasHtml(item) {
+  const extra = (item && item.extras) || {};
+  const sources = Array.isArray(extra.sources) ? extra.sources : [];
+  const resources = Array.isArray(extra.resources) ? extra.resources : [];
+  const widgets = Array.isArray(extra.widgets) ? extra.widgets : [];
+  if (!sources.length && !resources.length && !widgets.length) return '';
+  let html = '<aside class="extras"><div class="extras-grid">';
+  if (sources.length) {
+    html += '<div><h2>Fuentes</h2>' + sources.map((s) =>
+      s.url ? `<p><a href="${esc(s.url)}" rel="noopener" target="_blank">${esc(s.title || s.url)}</a></p>` : `<p>${esc(s.title || '')}</p>`
+    ).join('') + '</div>';
+  }
+  if (resources.length) {
+    html += '<div><h2>Recursos</h2>' + resources.map((s) => {
+      const note = s.note ? ` — ${esc(s.note)}` : '';
+      return s.url
+        ? `<p><a href="${esc(s.url)}" rel="noopener" target="_blank">${esc(s.title || s.url)}</a>${note}</p>`
+        : `<p>${esc(s.title || '')}${note}</p>`;
+    }).join('') + '</div>';
+  }
+  if (widgets.length) {
+    html += '<div><h2>Widgets</h2>' + widgets.map((w) => {
+      if (w.type === 'quote' || w.type === 'chart') {
+        const sym = esc(w.symbol || '');
+        return `<div class="widget"><div>${esc(w.label || w.symbol)}</div><img alt="${sym}" src="/api/chart/${encodeURIComponent(w.symbol)}.png"><p><a href="https://www.tradingview.com/symbols/${sym}/" rel="noopener" target="_blank">$${sym}</a></p></div>`;
+      }
+      if (w.type === 'embed' && w.url) {
+        return `<div class="widget"><iframe sandbox="allow-scripts allow-forms" src="${esc(w.url)}" title="${esc(w.label || 'widget')}"></iframe></div>`;
+      }
+      if (w.type === 'link' && w.url) {
+        return `<div class="widget"><a href="${esc(w.url)}" rel="noopener" target="_blank">${esc(w.label || w.url)}</a></div>`;
+      }
+      if (w.type === 'note' && w.text) {
+        return `<div class="widget"><p>${esc(w.text)}</p></div>`;
+      }
+      return '';
+    }).join('') + '</div>';
+  }
+  html += '</div></aside>';
+  return html;
 }
 
 export function renderArtifactPage(item) {
@@ -227,7 +285,7 @@ export function renderArtifactPage(item) {
   } else {
     stage = `<div class="stage"><pre class="code">${esc(raw)}</pre></div>`;
   }
-  return wrap(item.title || 'Artifact', stage, copy, bylineHtml(item));
+  return wrap(item.title || 'Library', stage + extrasHtml(item), copy, bylineHtml(item));
 }
 
 export function renderArtifactIndex(items, opts) {
@@ -238,16 +296,16 @@ export function renderArtifactIndex(items, opts) {
     const by = h
       ? `<div class="card-by"><img src="${esc(pic)}" alt=""><span>@${esc(h)}</span></div>`
       : '';
-    return `<a class="card" href="${itemHref({ ...it, handle: h })}">${by}<h2>${esc(it.title || it.slug)}</h2><p>${h ? '/artifact/@' + esc(h) + '/' + esc(it.slug) : '/artifact/' + esc(it.slug)}</p></a>`;
+    return `<a class="card" href="${itemHref({ ...it, handle: h })}">${by}<h2>${esc(it.title || it.slug)}</h2><p>${h ? '/library/@' + esc(h) + '/' + esc(it.slug) : '/library/' + esc(it.slug)}</p></a>`;
   }).join('');
-  const heading = handle ? '@' + handle : 'Artifacts';
+  const heading = handle ? '@' + handle : 'Library';
   const inner = cards
     ? `<div class="grid">${cards}</div>`
-    : `<div class="empty"><h1>${esc(heading)}</h1><p>${handle ? 'Este autor aún no ha publicado artifacts.' : 'Cada cuenta tiene su propio tablero. Publica desde el studio con una cuenta registrada: ' + ORIGIN + '/artifact/@usuario/slug'}</p></div>`;
+    : `<div class="empty"><h1>${esc(heading)}</h1><p>${handle ? 'Este autor aún no ha publicado en su library.' : 'Cada cuenta tiene su propio tablero. Publica desde el studio: ' + ORIGIN + '/library/@usuario/slug'}</p></div>`;
   const poster = handle ? bylineHtml({ handle, authorName: (opts && opts.authorName) || handle, authorPicture: (opts && opts.authorPicture) || '/avatar.png', dest: 'artifact' }) : '';
   return wrap(heading, inner, '', poster);
 }
 
 export function renderArtifactMissing() {
-  return wrap('No encontrado', `<div class="empty"><h1>Este artifact no existe</h1><p>Se despublicó, es de otra cuenta o el enlace es incorrecto.</p><p><a class="btn" href="/artifact">Ver publicados</a></p></div>`, '');
+  return wrap('No encontrado', `<div class="empty"><h1>Esta pieza no existe</h1><p>Se despublicó, es de otra cuenta o el enlace es incorrecto.</p><p><a class="btn" href="${LIBRARY_PREFIX}">Ver library</a></p></div>`, '');
 }

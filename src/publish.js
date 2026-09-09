@@ -57,14 +57,25 @@ export function publicIndexKey(dest) {
   return dest === 'guide' ? 'guide:public' : 'art:public';
 }
 
+export const LIBRARY_PREFIX = '/library';
+export const TITLE_MAX = 72;
+
+export function clampTitle(value) {
+  const s = String(value || '').replace(/\s+/g, ' ').trim();
+  if (s.length <= TITLE_MAX) return s;
+  const cut = s.slice(0, TITLE_MAX);
+  const sp = cut.lastIndexOf(' ');
+  return (sp >= 36 ? cut.slice(0, sp) : cut).replace(/[–—:,.-]+$/, '').trim();
+}
+
 export function publicUrl(dest, handle, slug) {
   if (dest === 'guide') return GUIDES_ORIGIN + '/u/@' + handle + '/' + slug;
-  return ARTIFACT_ORIGIN + '/artifact/@' + handle + '/' + slug;
+  return ARTIFACT_ORIGIN + LIBRARY_PREFIX + '/@' + handle + '/' + slug;
 }
 
 export function authorBoardUrl(dest, handle) {
   if (dest === 'guide') return GUIDES_ORIGIN + '/u/@' + handle;
-  return ARTIFACT_ORIGIN + '/artifact/@' + handle;
+  return ARTIFACT_ORIGIN + LIBRARY_PREFIX + '/@' + handle;
 }
 
 export function letterAvatarDataUri(name, handle) {
@@ -114,28 +125,103 @@ export function indexItem(record) {
   };
 }
 
-export function parseArtifactPath(pathname) {
+export function sanitizeHttpUrl(value) {
+  try {
+    const u = new URL(String(value || '').trim());
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    u.protocol = 'https:';
+    return u.toString().slice(0, 500);
+  } catch (e) {
+    return '';
+  }
+}
+
+function asList(v) {
+  return Array.isArray(v) ? v : [];
+}
+
+export function normalizeExtras(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const sources = asList(src.sources).slice(0, 12).map(function (it) {
+    const url = sanitizeHttpUrl(it && (it.url || it.href));
+    const title = clampTitle((it && (it.title || it.label)) || url);
+    if (!url) return null;
+    return { title: title || url, url };
+  }).filter(Boolean);
+  const resources = asList(src.resources).slice(0, 12).map(function (it) {
+    const url = sanitizeHttpUrl(it && (it.url || it.href));
+    const title = clampTitle((it && (it.title || it.label)) || url);
+    const note = String((it && (it.note || it.text)) || '').trim().slice(0, 160);
+    if (!url && !title) return null;
+    return { title: title || url || 'Recurso', url: url || '', note };
+  }).filter(Boolean);
+  const widgets = asList(src.widgets).slice(0, 8).map(function (it) {
+    const type = String((it && it.type) || '').toLowerCase();
+    if (type === 'quote' || type === 'chart') {
+      const symbol = String((it && (it.symbol || it.ticker)) || '').toUpperCase().replace(/[^A-Z0-9.=^-]/g, '').slice(0, 12);
+      if (!symbol) return null;
+      return { type: type === 'chart' ? 'chart' : 'quote', symbol, label: clampTitle((it && it.label) || symbol) };
+    }
+    if (type === 'link') {
+      const url = sanitizeHttpUrl(it && it.url);
+      if (!url) return null;
+      return { type: 'link', url, label: clampTitle((it && (it.label || it.title)) || url) };
+    }
+    if (type === 'note') {
+      const text = String((it && (it.text || it.note)) || '').trim().slice(0, 280);
+      if (!text) return null;
+      return { type: 'note', text };
+    }
+    if (type === 'embed') {
+      const url = sanitizeHttpUrl(it && it.url);
+      if (!url) return null;
+      return { type: 'embed', url, label: clampTitle((it && it.label) || '') };
+    }
+    return null;
+  }).filter(Boolean);
+  return { sources, resources, widgets };
+}
+
+export function parsePubPath(pathname) {
+  const raw = String(pathname || '').replace(/\/+$/, '') || '/';
+  if (raw === '/library' || raw === '/artifact') return { kind: 'global', prefix: raw === '/library' ? LIBRARY_PREFIX : '/artifact' };
+  let rest = '';
+  let prefix = '';
+  if (raw.startsWith('/library/')) {
+    prefix = LIBRARY_PREFIX;
+    rest = raw.slice('/library/'.length);
+  } else if (raw.startsWith('/artifact/')) {
+    prefix = '/artifact';
+    rest = raw.slice('/artifact/'.length);
+  } else {
+    return null;
+  }
+  return parseArtifactPath('/artifact/' + rest, prefix);
+}
+
+export function parseArtifactPath(pathname, prefix) {
   const base = String(pathname || '').replace(/\/+$/, '') || '/';
-  if (base === '/artifact') return { kind: 'global' };
+  const pref = prefix || '/artifact';
+  if (base === '/artifact') return { kind: 'global', prefix: pref };
   if (!base.startsWith('/artifact/')) return null;
   const parts = base.slice('/artifact/'.length).split('/').filter(Boolean);
   if (!parts.length) return { kind: 'global' };
   if (parts[0].startsWith('@')) {
     const handle = slugifyHandle(parts[0]);
-    if (!handle) return { kind: 'missing' };
+    if (!handle) return { kind: 'missing', prefix: pref };
     if (parts[1]) {
       const slug = slugifySlug(parts[1]);
-      return slug ? { kind: 'item', handle, slug } : { kind: 'missing' };
+      return slug ? { kind: 'item', handle, slug, prefix: pref } : { kind: 'missing', prefix: pref };
     }
-    return { kind: 'author', handle };
+    return { kind: 'author', handle, prefix: pref };
   }
   if (parts.length >= 2) {
     const handle = slugifyHandle(parts[0]);
     const slug = slugifySlug(parts[1]);
-    if (handle && slug) return { kind: 'item', handle, slug };
+    if (handle && slug) return { kind: 'item', handle, slug, prefix: pref };
   }
   const slug = slugifySlug(parts[0]);
-  return slug ? { kind: 'legacy', slug } : { kind: 'missing' };
+  return slug ? { kind: 'legacy', slug, prefix: pref } : { kind: 'missing', prefix: pref };
 }
 
 export async function readJsonArray(kv, key) {

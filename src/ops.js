@@ -190,18 +190,19 @@ export async function handleIdeaPost({ body, ip, env, sendEmail }) {
   </div>
 </div>`
 
+  const mail = {
+    to: env?.OWNER_INBOX || env?.OWNER_EMAIL || OWNER_INBOX,
+    subject: `[Trujillo AI] Idea (${catLabel}): ${text.slice(0, 60)}`,
+    heading: 'Nueva Idea de Usuario',
+    text: `${catLabel}\n${fromLine}\n${relativeTime}\n\n${text}\n\nID: ${item.id}`,
+    html,
+    tag: 'idea'
+  }
   if (typeof sendEmail === 'function') {
-    await sendEmail({
-      to: env?.OWNER_INBOX || env?.OWNER_EMAIL || OWNER_INBOX,
-      subject: `[Trujillo AI] Idea (${catLabel}): ${text.slice(0, 60)}`,
-      heading: 'Nueva Idea de Usuario',
-      text: `${catLabel}\n${fromLine}\n${relativeTime}\n\n${text}\n\nID: ${item.id}`,
-      html,
-      tag: 'idea'
-    })
+    await sendEmail(mail)
   }
 
-  return { status: 200, payload: { ok: true, id: item.id } }
+  return { status: 200, payload: { ok: true, id: item.id }, mail }
 }
 
 function esc(s) {

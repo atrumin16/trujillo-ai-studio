@@ -161,6 +161,7 @@
       '<form id="form-forgot" class="flex-col" style="display:none">' +
       '<div style="text-align:center"><div style="font-weight:650;color:#fff">Recuperar contraseña</div><p style="font-size:0.84rem;color:var(--muted);margin-top:4px">Te enviamos un código de 6 dígitos.</p></div>' +
       '<div class="field-group"><label class="field-label">Correo</label><input type="email" class="field-input" id="forgot-email" placeholder="tu@correo.com" required autocomplete="email"></div>' +
+      '<input type="text" class="hp-field" id="forgot-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">' +
       '<button type="submit" class="btn-submit" id="forgot-btn">Enviar código</button>' +
       '<button type="button" class="ghost-link" data-tab="login">← Volver</button></form>' +
       '<form id="form-reset" class="flex-col" style="display:none">' +
@@ -174,7 +175,15 @@
       '<div class="field-group"><label class="field-label">Nombre</label><input type="text" class="field-input" id="reg-name" placeholder="Tu nombre" required autocomplete="name"></div>' +
       '<div class="field-group"><label class="field-label">Correo</label><input type="email" class="field-input" id="reg-email" placeholder="tu@correo.com" required autocomplete="email"></div>' +
       '<div class="field-group"><label class="field-label">Contraseña (mín. 6)</label><input type="password" class="field-input" id="reg-password" placeholder="••••••••" minlength="6" required autocomplete="new-password"></div>' +
+      '<input type="text" class="hp-field" id="reg-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">' +
       '<button type="submit" class="btn-submit" id="reg-btn">Crear cuenta</button></form>' +
+      '<form id="form-mail-confirm" class="flex-col" style="display:none;text-align:center">' +
+      '<p style="font-size:0.9rem;color:#fff;font-weight:650">Confirma que eres una persona</p>' +
+      '<p style="font-size:0.84rem;color:var(--muted);margin:8px 0 14px">Los bots no pueden enviar correo. Pulsa el botón para mandar el mensaje a <strong id="mail-confirm-email" style="color:#fff"></strong>.</p>' +
+      '<input type="text" class="hp-field" id="mail-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">' +
+      '<label style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:0.84rem;margin-bottom:12px"><input type="checkbox" id="mail-human"> Soy una persona</label>' +
+      '<button type="submit" class="btn-submit" id="mail-confirm-btn" disabled>Enviar el correo ahora</button>' +
+      '<button type="button" class="ghost-link" data-tab="login">← Volver</button></form>' +
       '<form id="form-verify" class="flex-col" style="display:none;text-align:center">' +
       '<p style="font-size:0.86rem;color:var(--muted)">Código enviado a <strong id="verify-email-display" style="color:#fff"></strong></p>' +
       '<div class="field-group" style="align-items:center"><input type="text" class="field-input" id="verify-code" maxlength="24" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" style="text-align:center;font-size:1.6rem;font-weight:700;font-family:var(--mono);letter-spacing:0.12em;width:240px" required></div>' +
@@ -201,6 +210,8 @@
   function initAuth(initialTab) {
     var pendingVerifyEmail = '';
     var pendingResetEmail = '';
+    var pendingMailTicket = '';
+    var pendingMailNext = 'verify';
     var GOOGLE_CLIENT_ID = '161745150528-5pb84k9upvamvlvnc7lg6nr1ku74vc4a.apps.googleusercontent.com';
     var X_CLIENT_ID = 'NF94WVVIT1dzSXZNaTJuYjRXSEc6MTpjaQ';
     var urlParams = new URLSearchParams(window.location.search);
@@ -256,6 +267,7 @@
       var verifyForm = document.getElementById('form-verify');
       var forgotForm = document.getElementById('form-forgot');
       var resetForm = document.getElementById('form-reset');
+      var mailForm = document.getElementById('form-mail-confirm');
       var tabsNav = document.getElementById('auth-tabs');
       var social = document.getElementById('auth-social');
       document.getElementById('tab-login-btn').classList.remove('active');
@@ -265,12 +277,14 @@
       verifyForm.style.display = 'none';
       forgotForm.style.display = 'none';
       resetForm.style.display = 'none';
+      if (mailForm) mailForm.style.display = 'none';
       if (social) social.style.display = (tab === 'login' || tab === 'register') ? 'block' : 'none';
       if (tab === 'login') { loginForm.style.display = 'flex'; tabsNav.style.display = 'grid'; document.getElementById('tab-login-btn').classList.add('active'); }
       else if (tab === 'register') { regForm.style.display = 'flex'; tabsNav.style.display = 'grid'; document.getElementById('tab-reg-btn').classList.add('active'); }
       else if (tab === 'verify') { verifyForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
       else if (tab === 'forgot') { forgotForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
       else if (tab === 'reset') { resetForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
+      else if (tab === 'mailconfirm' && mailForm) { mailForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
     }
     function finishLogin(data) {
       localStorage.setItem('trujillo_ai_token', data.token);
@@ -380,14 +394,24 @@
       var btn = document.getElementById('forgot-btn');
       btn.disabled = true; btn.textContent = 'Enviando...';
       try {
-        var res = await fetch('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email }) });
+        var hp = document.getElementById('forgot-website');
+        var res = await fetch('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email, website: hp ? hp.value : '' }) });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al enviar código');
         pendingResetEmail = email;
         var resetEmailEl = document.getElementById('reset-email');
         if (resetEmailEl) resetEmailEl.value = email;
-        switchAuthTab('reset');
-        showAlert('Código enviado a ' + email + '.', true);
+        if (data.needsClick && data.ticket) {
+          pendingMailTicket = data.ticket;
+          pendingMailNext = 'reset';
+          var mailEmail = document.getElementById('mail-confirm-email');
+          if (mailEmail) mailEmail.textContent = email;
+          switchAuthTab('mailconfirm');
+          showAlert('Pulsa el botón para enviar el correo.', true);
+        } else {
+          switchAuthTab('reset');
+          showAlert('Código enviado a ' + email + '.', true);
+        }
       } catch (err) { showAlert(err.message); }
       finally { btn.disabled = false; btn.textContent = 'Enviar código'; }
     };
@@ -422,13 +446,23 @@
       var btn = document.getElementById('reg-btn');
       btn.disabled = true; btn.textContent = 'Creando...';
       try {
-        var res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, email: email, password: password, locale: (window.TA && TA.lang) ? TA.lang() : 'es' }) });
+        var hp = document.getElementById('reg-website');
+        var res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, email: email, password: password, locale: (window.TA && TA.lang) ? TA.lang() : 'es', website: hp ? hp.value : '' }) });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al registrar');
         pendingVerifyEmail = email;
         document.getElementById('verify-email-display').textContent = email;
-        switchAuthTab('verify');
-        showAlert('Código enviado a ' + email + '.', true);
+        if (data.needsClick && data.ticket) {
+          pendingMailTicket = data.ticket;
+          pendingMailNext = 'verify';
+          var mailEmail = document.getElementById('mail-confirm-email');
+          if (mailEmail) mailEmail.textContent = email;
+          switchAuthTab('mailconfirm');
+          showAlert('Pulsa el botón para enviar el correo de verificación.', true);
+        } else {
+          switchAuthTab('verify');
+          showAlert('Código enviado a ' + email + '.', true);
+        }
       } catch (err) { showAlert(err.message); }
       finally { btn.disabled = false; btn.textContent = 'Crear cuenta'; }
     };
@@ -448,6 +482,30 @@
         showAlert('Cuenta activa. Entrando...', true);
         setTimeout(function () { window.location.href = '/'; }, 400);
       } catch (err) { showAlert(err.message); btn.disabled = false; btn.textContent = 'Verificar'; }
+    };
+
+    var humanBox = document.getElementById('mail-human');
+    var mailBtn = document.getElementById('mail-confirm-btn');
+    if (humanBox && mailBtn) {
+      humanBox.addEventListener('change', function () { mailBtn.disabled = !humanBox.checked; });
+    }
+    var mailForm = document.getElementById('form-mail-confirm');
+    if (mailForm) mailForm.onsubmit = async function (e) {
+      e.preventDefault(); hideAlert();
+      if (!pendingMailTicket) return showAlert('Vuelve a pedir el correo.');
+      if (humanBox && !humanBox.checked) return showAlert('Marca que eres una persona.');
+      var btn = document.getElementById('mail-confirm-btn');
+      var hp = document.getElementById('mail-website');
+      btn.disabled = true; btn.textContent = 'Enviando...';
+      try {
+        var res = await fetch('/api/mail/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket: pendingMailTicket, website: hp ? hp.value : '' }) });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo enviar');
+        pendingMailTicket = '';
+        switchAuthTab(pendingMailNext || 'verify');
+        showAlert('Correo enviado. Revisa tu bandeja.', true);
+      } catch (err) { showAlert(err.message); }
+      finally { btn.disabled = !(humanBox && humanBox.checked); btn.textContent = 'Enviar el correo ahora'; }
     };
   }
 })();

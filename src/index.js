@@ -10,8 +10,12 @@ import {
   normalizeDest,
   ownsRecord,
   parseArtifactPath,
+  parsePubPath,
   publicIndexKey,
   publicUrl,
+  clampTitle,
+  normalizeExtras,
+  LIBRARY_PREFIX,
   readJsonArray,
   recordKey,
   resolvePicture,
@@ -52,6 +56,7 @@ import {
   synthMessages
 } from './profile.js';
 import { getRealtimeSystemTimeContext, resolveTimezone } from './time.js';
+import { consumeMailTicket, honeypotFilled, issueMailTicket, rateMail } from './mail_gate.js';
 
 const APP_FROM_EMAIL = 'no-reply@trujillomingorance.com';
 const APP_SUPPORT_EMAIL = 'alberto@trujillomingorance.com';
@@ -601,9 +606,14 @@ export default {
       }, 200, corsHeaders);
     }
 
-    const artBase = (originalPath.replace(/\/+$/, '') || '/');
-    if (isGetOrHead && (artBase === '/artifact' || artBase.startsWith('/artifact/'))) {
-      const parsed = parseArtifactPath(artBase);
+    const strippedPath = (url.pathname.replace(/\/+$/, '') || '/');
+    if (isGetOrHead && (strippedPath === '/artifact' || strippedPath.startsWith('/artifact/'))) {
+      const rest = strippedPath === '/artifact' ? '' : strippedPath.slice('/artifact'.length);
+      const loc = ARTIFACT_ORIGIN + (pathLang ? '/' + pathLang : '') + LIBRARY_PREFIX + rest + url.search;
+      return Response.redirect(loc, 301);
+    }
+    if (isGetOrHead && (strippedPath === '/library' || strippedPath.startsWith('/library/'))) {
+      const parsed = parsePubPath(strippedPath);
       let body = '';
       let status = 200;
       if (!parsed || parsed.kind === 'missing') {
@@ -742,7 +752,7 @@ export default {
         const handle = await ensureUserHandle(env, user);
         const body = await request.json();
         const dest = normalizeDest(body.dest || body.destination);
-        const title = String(body.title || '').trim().slice(0, 120);
+        const title = clampTitle(body.title || '');
         const content = String(body.content || '');
         const lang = String(body.lang || body.format || 'markdown').trim().slice(0, 32);
         if (!title || !content.trim()) {
@@ -782,6 +792,7 @@ export default {
           }
         }
         const picture = resolvePicture(user, handle, dest === 'guide' ? GUIDES_ORIGIN : ARTIFACT_ORIGIN);
+        const extras = normalizeExtras(body.extras);
         const now = Date.now();
         const record = {
           slug,
@@ -789,6 +800,7 @@ export default {
           lang,
           dest,
           content,
+          extras,
           description: String(body.description || content.replace(/\s+/g, ' ').slice(0, 180)),
           handle,
           author: String(user.email || user.id || '').toLowerCase(),
@@ -1084,13 +1096,19 @@ export default {
         const password = body.password || '';
         const locale = ['es', 'en', 'fr', 'pt', 'de', 'it', 'ca', 'zh'].includes(body.locale) ? body.locale : 'es';
 
+        if (honeypotFilled(body)) {
+          return new Response(JSON.stringify({ error: 'Rechazado' }), { status: 400, headers: corsHeaders });
+        }
         if (!email.includes('@') || password.length < 6 || !name) {
           return new Response(JSON.stringify({ error: 'Datos de registro inválidos. Mínimo 6 caracteres.' }), { status: 400, headers: corsHeaders });
         }
-
         const existingUser = await getCachedKvValue(env.BOT_MEMORY, `user_email_${email}`);
         if (existingUser) {
           return new Response(JSON.stringify({ error: 'Este correo electrónico ya está registrado. Inicie sesión.' }), { status: 400, headers: corsHeaders });
+        }
+        const mailRate = await rateMail(env, clientIp);
+        if (!mailRate.ok) {
+          return new Response(JSON.stringify({ error: 'Demasiados intentos. Espera una hora.' }), { status: 429, headers: corsHeaders });
         }
 
         const salt = crypto.randomUUID();
@@ -1105,36 +1123,13 @@ export default {
         }
         setInRam(`pending_user_${email}`, pendingUser);
 
-        const copy = emailCopy(locale);
-        const emailHtml = brandEmailHtml({
-          title: copy.verifyTitle,
-          preheader: copy.verifySubject(verifyCode),
-          locale,
-          bodyHtml: `<p>${copy.hello} <strong style="color:#fafafa;">${escapeEmail(name)}</strong>,</p>
-            <p>${copy.verifyBody}</p>
-            ${otpBlock(verifyCode, copy.copyHint)}`,
-          ctaLabel: copy.verifyCta,
-          ctaUrl: `${APP_ORIGIN}/login`
-        });
-
-        let emailResult = await sendAppEmail(env, {
-          to: email,
-          subject: copy.verifySubject(verifyCode),
-          text: `${copy.hello} ${name}, ${copy.verifyBody} Tu código: ${verifyCode}. ${APP_ORIGIN}/login`,
-          html: emailHtml,
-          tag: 'verify'
-        });
-
-        if (!emailResult.ok) {
-          return new Response(JSON.stringify({
-            error: 'No se pudo enviar el correo de verificación. Inténtalo de nuevo en unos minutos.'
-          }), { status: 500, headers: corsHeaders });
-        }
-
+        const ticket = await issueMailTicket(env, { kind: 'verify', email, locale, name }, clientIp);
         return new Response(JSON.stringify({
           ok: true,
-          message: `Código de verificación enviado a ${email}.`,
-          email
+          needsClick: true,
+          ticket,
+          email,
+          message: 'Haz clic para enviar el correo de verificación.'
         }), { status: 200, headers: corsHeaders });
       } catch (e) {
         return new Response(JSON.stringify({ error: e?.message || 'Fallo al registrar usuario' }), { status: 500, headers: corsHeaders });
@@ -1366,8 +1361,15 @@ export default {
         const body = await request.json();
         const email = (body.email || '').trim().toLowerCase();
 
+        if (honeypotFilled(body)) {
+          return new Response(JSON.stringify({ error: 'Rechazado' }), { status: 400, headers: corsHeaders });
+        }
         if (!email || !email.includes('@')) {
           return new Response(JSON.stringify({ error: 'Introduce un correo electrónico válido.' }), { status: 400, headers: corsHeaders });
+        }
+        const mailRate = await rateMail(env, clientIp);
+        if (!mailRate.ok) {
+          return new Response(JSON.stringify({ error: 'Demasiados intentos. Espera una hora.' }), { status: 429, headers: corsHeaders });
         }
 
         let userRecord = asUser(getFromRam(`user_email_${email}`));
@@ -1381,6 +1383,17 @@ export default {
           }), { status: 400, headers: corsHeaders });
         }
 
+        if (!userRecord) {
+          const ticket = await issueMailTicket(env, { kind: 'noop' }, clientIp);
+          return new Response(JSON.stringify({
+            ok: true,
+            needsClick: true,
+            ticket,
+            email,
+            message: 'Haz clic para enviar el correo de recuperación.'
+          }), { status: 200, headers: corsHeaders });
+        }
+
         const resetCode = generate6DigitCode();
         const resetData = { email, resetCode, createdAt: Date.now() };
 
@@ -1389,36 +1402,18 @@ export default {
         }
         setInRam(`reset_code_${email}`, resetData);
 
-        const copy = emailCopy(userRecord?.locale || 'es');
-        const emailHtml = brandEmailHtml({
-          title: copy.resetTitle,
-          preheader: copy.resetSubject(resetCode),
+        const ticket = await issueMailTicket(env, {
+          kind: 'reset',
+          email,
           locale: userRecord?.locale || 'es',
-          bodyHtml: `<p>${copy.hello} <strong style="color:#fafafa;">${escapeEmail(userRecord?.name || '')}</strong>,</p>
-            <p>${copy.resetBody}</p>
-            ${otpBlock(resetCode, copy.copyHint)}`,
-          ctaLabel: copy.resetCta,
-          ctaUrl: `${APP_ORIGIN}/login?tab=reset&email=${encodeURIComponent(email)}`
-        });
-
-        let emailResult = await sendAppEmail(env, {
-          to: email,
-          subject: copy.resetSubject(resetCode),
-          text: `${copy.resetBody} Tu código: ${resetCode}. ${APP_ORIGIN}/login?tab=reset`,
-          html: emailHtml,
-          tag: 'reset'
-        });
-
-        if (!emailResult.ok) {
-          return new Response(JSON.stringify({
-            error: 'No se pudo enviar el correo. Inténtalo de nuevo en unos minutos.'
-          }), { status: 500, headers: corsHeaders });
-        }
-
+          name: userRecord?.name || ''
+        }, clientIp);
         return new Response(JSON.stringify({
           ok: true,
-          message: `Código enviado a ${email}.`,
-          email
+          needsClick: true,
+          ticket,
+          email,
+          message: 'Haz clic para enviar el correo de recuperación.'
         }), { status: 200, headers: corsHeaders });
 
       } catch (e) {
@@ -1534,27 +1529,85 @@ export default {
       });
     }
 
-    if (url.pathname === '/api/ideas' && request.method === 'POST') {
+    if (url.pathname === '/api/mail/send' && request.method === 'POST') {
       try {
-        const body = await request.json();
-        const result = await handleIdeaPost({
-          body,
-          ip: clientIp,
-          env,
-          sendEmail: (opts) => sendAppEmail(env, {
-            ...opts,
+        const body = await request.json().catch(() => ({}));
+        if (honeypotFilled(body)) {
+          return new Response(JSON.stringify({ error: 'Rechazado' }), { status: 400, headers: corsHeaders });
+        }
+        const mailRate = await rateMail(env, clientIp);
+        if (!mailRate.ok) {
+          return new Response(JSON.stringify({ error: 'Demasiados envíos. Espera una hora.' }), { status: 429, headers: corsHeaders });
+        }
+        const consumed = await consumeMailTicket(env, body.ticket, clientIp);
+        if (!consumed.ok) {
+          return new Response(JSON.stringify({ error: consumed.error || 'Confirma de nuevo' }), { status: 400, headers: corsHeaders });
+        }
+        const payload = consumed.payload || {};
+        let sent = { ok: false, error: 'Acción desconocida' };
+        if (payload.kind === 'noop') {
+          sent = { ok: true };
+        } else if (payload.kind === 'verify') {
+          sent = await sendVerifyMail(env, payload.email);
+        } else if (payload.kind === 'reset') {
+          sent = await sendResetMail(env, payload.email);
+        } else if (payload.kind === 'test') {
+          sent = await sendTestMail(env, payload);
+        } else if (payload.kind === 'idea' && payload.mail) {
+          const mail = payload.mail;
+          sent = await sendAppEmail(env, {
+            ...mail,
             html: brandEmailHtml({
-              title: opts.heading || 'Sugerencia de Usuario',
-              preheader: opts.text || opts.subject,
-              bodyHtml: opts.html,
+              title: mail.heading || 'Sugerencia de Usuario',
+              preheader: mail.text || mail.subject,
+              bodyHtml: mail.html,
               ctaLabel: 'Abrir workspace',
               ctaUrl: APP_ORIGIN,
               locale: 'es'
             })
-          })
+          });
+        }
+        if (!sent.ok) {
+          return new Response(JSON.stringify({ error: sent.error || 'No se pudo enviar el correo' }), { status: 502, headers: corsHeaders });
+        }
+        return new Response(JSON.stringify({ ok: true, message: 'Correo enviado. Revisa tu bandeja.' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
         });
-        return new Response(JSON.stringify(result.payload), {
-          status: result.status,
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e?.message || 'mail_failed' }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    if (url.pathname === '/api/ideas' && request.method === 'POST') {
+      try {
+        const body = await request.json();
+        if (honeypotFilled(body)) {
+          return new Response(JSON.stringify({ error: 'Rechazado' }), { status: 400, headers: corsHeaders });
+        }
+        const mailRate = await rateMail(env, clientIp);
+        if (!mailRate.ok) {
+          return new Response(JSON.stringify({ error: 'Demasiados envíos. Espera una hora.' }), { status: 429, headers: corsHeaders });
+        }
+        const result = await handleIdeaPost({
+          body,
+          ip: clientIp,
+          env,
+          sendEmail: null
+        });
+        if (result.status !== 200) {
+          return new Response(JSON.stringify(result.payload), {
+            status: result.status,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        const ticket = await issueMailTicket(env, { kind: 'idea', mail: result.mail }, clientIp);
+        return new Response(JSON.stringify({
+          ok: true,
+          needsClick: true,
+          ticket,
+          id: result.payload && result.payload.id,
+          message: 'Haz clic para enviar la idea por correo.'
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       } catch (e) {
@@ -1735,24 +1788,26 @@ export default {
       try {
         const user = await getAuthedUser(request, env);
         if (!user) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
-        const copy = emailCopy(user.locale);
-        const html = brandEmailHtml({
-          title: copy.testTitle,
-          preheader: copy.testSubject,
-          locale: user.locale,
-          bodyHtml: `<p>${copy.hello} <strong style="color:#fafafa;">${escapeEmail(user.name || '')}</strong>,</p><p>${copy.testBody}</p>`,
-          ctaLabel: copy.testCta,
-          ctaUrl: APP_ORIGIN
-        });
-        const sent = await sendAppEmail(env, {
-          to: user.email,
-          subject: copy.testSubject,
-          text: copy.testBody,
-          html,
-          tag: 'test'
-        });
-        if (!sent.ok) return new Response(JSON.stringify({ error: sent.error }), { status: 502, headers: corsHeaders });
-        return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const body = await request.json().catch(() => ({}));
+        if (honeypotFilled(body)) {
+          return new Response(JSON.stringify({ error: 'Rechazado' }), { status: 400, headers: corsHeaders });
+        }
+        const mailRate = await rateMail(env, clientIp);
+        if (!mailRate.ok) {
+          return new Response(JSON.stringify({ error: 'Demasiados envíos. Espera una hora.' }), { status: 429, headers: corsHeaders });
+        }
+        const ticket = await issueMailTicket(env, {
+          kind: 'test',
+          email: user.email,
+          locale: user.locale || 'es',
+          name: user.name || ''
+        }, clientIp);
+        return new Response(JSON.stringify({
+          ok: true,
+          needsClick: true,
+          ticket,
+          message: 'Haz clic para enviar el correo de prueba.'
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       } catch (e) {
         return new Response(JSON.stringify({ error: e?.message || 'email_failed' }), { status: 500, headers: corsHeaders });
       }
@@ -4037,6 +4092,86 @@ async function getAuthedUser(request, env) {
     return user;
   }
   return null;
+}
+
+async function sendVerifyMail(env, email) {
+  const key = String(email || '').trim().toLowerCase();
+  let pending = getFromRam(`pending_user_${key}`);
+  if (!pending && env.BOT_MEMORY) {
+    const pendingStr = await env.BOT_MEMORY.get(`pending_user_${key}`);
+    if (pendingStr) pending = JSON.parse(pendingStr);
+  }
+  if (!pending) return { ok: false, error: 'El registro caducó. Vuelve a crear la cuenta.' };
+  const locale = pending.locale || 'es';
+  const copy = emailCopy(locale);
+  const emailHtml = brandEmailHtml({
+    title: copy.verifyTitle,
+    preheader: copy.verifySubject(pending.verifyCode),
+    locale,
+    bodyHtml: `<p>${copy.hello} <strong style="color:#fafafa;">${escapeEmail(pending.name)}</strong>,</p>
+      <p>${copy.verifyBody}</p>
+      ${otpBlock(pending.verifyCode, copy.copyHint)}`,
+    ctaLabel: copy.verifyCta,
+    ctaUrl: `${APP_ORIGIN}/login`
+  });
+  return sendAppEmail(env, {
+    to: key,
+    subject: copy.verifySubject(pending.verifyCode),
+    text: `${copy.hello} ${pending.name}, ${copy.verifyBody} Tu código: ${pending.verifyCode}. ${APP_ORIGIN}/login`,
+    html: emailHtml,
+    tag: 'verify'
+  });
+}
+
+async function sendResetMail(env, email) {
+  const key = String(email || '').trim().toLowerCase();
+  let resetData = getFromRam(`reset_code_${key}`);
+  if (!resetData && env.BOT_MEMORY) {
+    const raw = await env.BOT_MEMORY.get(`reset_code_${key}`);
+    if (raw) resetData = JSON.parse(raw);
+  }
+  if (!resetData) return { ok: false, error: 'La solicitud caducó. Vuelve a pedir el código.' };
+  let userRecord = asUser(getFromRam(`user_email_${key}`));
+  if (!userRecord && env.BOT_MEMORY) userRecord = asUser(await env.BOT_MEMORY.get(`user_email_${key}`));
+  const locale = userRecord?.locale || 'es';
+  const copy = emailCopy(locale);
+  const emailHtml = brandEmailHtml({
+    title: copy.resetTitle,
+    preheader: copy.resetSubject(resetData.resetCode),
+    locale,
+    bodyHtml: `<p>${copy.hello} <strong style="color:#fafafa;">${escapeEmail(userRecord?.name || '')}</strong>,</p>
+      <p>${copy.resetBody}</p>
+      ${otpBlock(resetData.resetCode, copy.copyHint)}`,
+    ctaLabel: copy.resetCta,
+    ctaUrl: `${APP_ORIGIN}/login?tab=reset&email=${encodeURIComponent(key)}`
+  });
+  return sendAppEmail(env, {
+    to: key,
+    subject: copy.resetSubject(resetData.resetCode),
+    text: `${copy.resetBody} Tu código: ${resetData.resetCode}. ${APP_ORIGIN}/login?tab=reset`,
+    html: emailHtml,
+    tag: 'reset'
+  });
+}
+
+async function sendTestMail(env, payload) {
+  const locale = payload.locale || 'es';
+  const copy = emailCopy(locale);
+  const html = brandEmailHtml({
+    title: copy.testTitle,
+    preheader: copy.testSubject,
+    locale,
+    bodyHtml: `<p>${copy.hello} <strong style="color:#fafafa;">${escapeEmail(payload.name || '')}</strong>,</p><p>${copy.testBody}</p>`,
+    ctaLabel: copy.testCta,
+    ctaUrl: APP_ORIGIN
+  });
+  return sendAppEmail(env, {
+    to: payload.email,
+    subject: copy.testSubject,
+    text: copy.testBody,
+    html,
+    tag: 'test'
+  });
 }
 
 async function sendWelcomeEmail(env, user) {

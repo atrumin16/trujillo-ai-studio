@@ -192,7 +192,10 @@
     }
     .history-item:hover, .doc-item:hover, .proj-item:hover { background: rgba(127,127,127,0.12); color: var(--text); }
     .history-item.active, .proj-item.active { background: var(--elev-2); color: var(--text); font-weight: 650; }
-    .history-title, .doc-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .history-title, .doc-title {
+      overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      white-space: normal; line-height: 1.3; flex: 1; min-width: 0;
+    }
     .history-del-btn, .mini-x {
       opacity: 0; background: none; border: none; color: var(--dim); cursor: pointer; padding: 2px 4px; border-radius: 4px;
     }
@@ -648,12 +651,26 @@
       flex: 0 0 auto; padding: 12px 14px 10px; border-bottom: 1px solid var(--line);
       display: flex; flex-direction: column; gap: 8px; background: var(--elev); z-index: 2;
     }
-    .art-head-top { display: flex; align-items: center; gap: 8px; }
+    .art-head-top { display: flex; align-items: flex-start; gap: 8px; }
+    .art-title-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
     .art-title-input {
-      flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line); color: var(--text);
+      width: 100%; min-width: 0; background: var(--bg); border: 1px solid var(--line); color: var(--text);
       border-radius: 8px; padding: 8px 10px; font-size: 0.9rem; font-weight: 650; font-family: inherit; outline: none;
+      resize: none; line-height: 1.3; min-height: 42px; max-height: 72px; white-space: pre-wrap; overflow: auto;
     }
     .art-title-input:focus { border-color: var(--line-2); }
+    .art-title-count { font-size: 0.65rem; color: var(--dim); text-align: right; }
+    .art-extras { border-top: 1px solid var(--line); padding: 8px 12px 10px; background: var(--elev); flex-shrink: 0; }
+    .art-extras-toggle { background: none; border: 0; color: var(--muted); font-size: 0.75rem; font-weight: 650; cursor: pointer; padding: 4px 0; }
+    .art-extras-toggle:hover { color: var(--text); }
+    .art-extras-body { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
+    .art-extras-body[hidden] { display: none !important; }
+    .art-extras-body label { font-size: 0.68rem; font-weight: 650; color: var(--dim); }
+    .art-extras-body textarea {
+      width: 100%; min-height: 58px; resize: vertical; background: var(--bg); color: var(--text);
+      border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-family: var(--mono); font-size: 0.75rem; line-height: 1.4;
+    }
+    .hp-field { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
     .art-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .art-toolbar .topbar-action-btn { flex: 0 0 auto; min-height: 34px; padding: 7px 12px; }
     .art-format { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 0.75rem; padding: 7px 8px; font-family: inherit; min-width: 124px; min-height: 34px; }
@@ -862,13 +879,16 @@
   <aside class="art-panel" id="art-panel" aria-label="Artefacto">
     <div class="art-head">
       <div class="art-head-top">
-        <input type="text" class="art-title-input" id="art-title" value="Artifact" placeholder="Título del artifact" aria-label="Título del artifact">
+        <div class="art-title-wrap">
+          <textarea class="art-title-input" id="art-title" maxlength="72" rows="2" placeholder="Título corto (máx. 72)" aria-label="Título">Artifact</textarea>
+          <div class="art-title-count" id="art-title-count">0/72</div>
+        </div>
         <button type="button" class="icon-btn" id="art-close-btn" title="Cerrar" aria-label="Cerrar">✕</button>
       </div>
       <div class="art-toolbar">
         <select id="art-format" class="art-format" title="Formato" aria-label="Formato del artifact"></select>
         <div class="art-dest" role="radiogroup" aria-label="Dónde publicar">
-          <button type="button" class="art-dest-btn active" data-dest="artifact" id="dest-artifact-btn">Artifact</button>
+          <button type="button" class="art-dest-btn active" data-dest="artifact" id="dest-artifact-btn">Library</button>
           <button type="button" class="art-dest-btn" data-dest="guide" id="dest-guide-btn">Guides</button>
         </div>
         <button type="button" class="topbar-action-btn" id="art-copy-btn">Copiar</button>
@@ -878,6 +898,17 @@
         <button type="button" class="topbar-action-btn" id="art-unpublish-btn">Despublicar</button>
       </div>
       <p class="art-hint" id="art-dest-hint">La IA deja una base. Elige Artifact o Guides. Hace falta una cuenta registrada; no se mezcla con el de otros.</p>
+    </div>
+    <div class="art-extras">
+      <button type="button" class="art-extras-toggle" id="art-extras-toggle">Fuentes, recursos y widgets</button>
+      <div class="art-extras-body" id="art-extras-body" hidden>
+        <label for="art-sources">Fuentes propias (una por línea: Título | https://…)</label>
+        <textarea id="art-sources" placeholder="SEC 10-K | https://www.sec.gov/…"></textarea>
+        <label for="art-resources">Recursos (una por línea)</label>
+        <textarea id="art-resources" placeholder="Modelo Excel | https://…"></textarea>
+        <label for="art-widgets">Widgets (quote:MSFT · note:texto · https://…)</label>
+        <textarea id="art-widgets" placeholder="quote:MSFT&#10;note:Riesgo: múltiplo elevado&#10;https://www.tradingview.com/symbols/MSFT/"></textarea>
+      </div>
     </div>
     <div class="art-split" id="art-split">
       <textarea class="art-editor" id="art-editor" spellcheck="false" placeholder="Escribe aquí el contenido. La IA genera una base; tú la editas." aria-label="Editor del artifact"></textarea>
@@ -1268,6 +1299,7 @@
             <label class="form-label" data-i18n="ideasEmail">Tu email (opcional)</label>
             <input type="email" id="idea-email" class="form-input" autocomplete="email">
           </div>
+          <input type="text" class="hp-field" id="idea-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
           <div class="settings-actions">
             <button type="button" id="idea-send-btn" class="topbar-action-btn primary" data-i18n="ideasSend">Enviar a Alberto</button>
           </div>
@@ -2173,13 +2205,75 @@
       }
     }
     if (!best && /^#\s+.+/m.test(markdown) && markdown.length > 500) {
-      best = { lang: 'markdown', content: markdown, title: (markdown.match(/^#\s+(.+)/m) || [,'Documento'])[1].slice(0, 60) };
+      best = { lang: 'markdown', content: markdown, title: clampArtTitle((markdown.match(/^#\s+(.+)/m) || [,'Documento'])[1]) };
     }
     return best;
   }
   function guessArtTitle(lang, body) {
-    var first = (body.split('\n').find(function(l) { return l.trim(); }) || '').replace(/^[#/*\s-]+/, '').slice(0, 48);
-    return first || ((lang || 'documento') + ' · Trujillo');
+    var first = (body.split('\n').find(function(l) { return l.trim(); }) || '').replace(/^[#/*\s-]+/, '');
+    return clampArtTitle(first) || ((lang || 'documento') + ' · Trujillo');
+  }
+  function clampArtTitle(value) {
+    var s = String(value || '').replace(/\s+/g, ' ').trim();
+    if (s.length <= 72) return s;
+    var cut = s.slice(0, 72);
+    var sp = cut.lastIndexOf(' ');
+    return (sp >= 36 ? cut.slice(0, sp) : cut).replace(/[–—:,.-]+$/, '').trim();
+  }
+  function parseExtraLines(text, kind) {
+    return String(text || '').split(/\n/).map(function(line) {
+      line = line.trim();
+      if (!line) return null;
+      if (kind === 'widget') {
+        var q = line.match(/^(?:quote|chart):?\s*\$?([A-Za-z0-9.=^-]{1,12})$/i);
+        if (q) return { type: /^chart/i.test(line) ? 'chart' : 'quote', symbol: q[1].toUpperCase(), label: q[1].toUpperCase() };
+        if (/^\$[A-Za-z]/.test(line)) return { type: 'quote', symbol: line.replace(/^\$/, '').toUpperCase().slice(0, 12) };
+        if (/^note:\s*/i.test(line)) return { type: 'note', text: line.replace(/^note:\s*/i, '').slice(0, 280) };
+        if (/^https?:\/\//i.test(line)) return { type: 'embed', url: line };
+        var wp = line.split('|');
+        if (wp.length >= 2) return { type: 'link', label: wp[0].trim(), url: wp.slice(1).join('|').trim() };
+        return { type: 'note', text: line.slice(0, 280) };
+      }
+      var parts = line.split('|');
+      if (parts.length >= 2) return { title: clampArtTitle(parts[0]), url: parts.slice(1).join('|').trim() };
+      if (/^https?:\/\//i.test(line)) return { title: line, url: line };
+      return { title: clampArtTitle(line), url: '' };
+    }).filter(Boolean);
+  }
+  function extrasToText(list, kind) {
+    return (list || []).map(function(it) {
+      if (kind === 'widget') {
+        if (it.type === 'quote' || it.type === 'chart') return (it.type === 'chart' ? 'chart:' : 'quote:') + (it.symbol || '');
+        if (it.type === 'note') return 'note:' + (it.text || '');
+        if (it.url && it.label) return it.label + ' | ' + it.url;
+        return it.url || it.text || '';
+      }
+      if (it.title && it.url) return it.title + ' | ' + it.url;
+      return it.url || it.title || '';
+    }).join('\n');
+  }
+  function readArtExtras() {
+    return {
+      sources: parseExtraLines((document.getElementById('art-sources') || {}).value, 'source'),
+      resources: parseExtraLines((document.getElementById('art-resources') || {}).value, 'resource'),
+      widgets: parseExtraLines((document.getElementById('art-widgets') || {}).value, 'widget')
+    };
+  }
+  function fillArtExtras(extras) {
+    extras = extras || { sources: [], resources: [], widgets: [] };
+    var s = document.getElementById('art-sources');
+    var r = document.getElementById('art-resources');
+    var w = document.getElementById('art-widgets');
+    if (s) s.value = extrasToText(extras.sources, 'source');
+    if (r) r.value = extrasToText(extras.resources, 'resource');
+    if (w) w.value = extrasToText(extras.widgets, 'widget');
+  }
+  function updateTitleCount() {
+    var title = document.getElementById('art-title');
+    var count = document.getElementById('art-title-count');
+    if (!title || !count) return;
+    var n = (title.value || '').length;
+    count.textContent = n + '/72';
   }
   var ART_FORMATS = [
     { id: 'html', label: 'HTML' },
@@ -2221,7 +2315,8 @@
     var title = document.getElementById('art-title');
     var editor = document.getElementById('art-editor');
     var sel = document.getElementById('art-format');
-    if (title) currentArtifact.title = (title.value || '').trim() || 'Artifact';
+    if (title) currentArtifact.title = clampArtTitle(title.value || '');
+    currentArtifact.extras = readArtExtras();
     if (editor) currentArtifact.content = editor.value || '';
     if (sel && sel.value) currentArtifact.lang = sel.value;
     return currentArtifact;
@@ -2316,7 +2411,7 @@
     if (hint) {
       hint.textContent = artifactDest === 'guide'
         ? 'Se publica en Guides, en tu tablero /u/@' + h + '/… Hace falta cuenta registrada.'
-        : 'Se publica en Artifact, en tu tablero /artifact/@' + h + '/… Hace falta cuenta registrada.';
+        : 'Se publica en Library: ai.trujillomingorance.com/library/@' + h + '/… Funciona también con /es/library/…';
     }
   }
   function syncArtifactActions() {
@@ -2340,8 +2435,10 @@
     var title = document.getElementById('art-title');
     var editor = document.getElementById('art-editor');
     var sel = document.getElementById('art-format');
-    if (title) title.value = currentArtifact.title || 'Artifact';
+    if (title) title.value = clampArtTitle(currentArtifact.title || 'Artifact');
     if (editor) editor.value = currentArtifact.content || '';
+    fillArtExtras(currentArtifact.extras);
+    updateTitleCount();
     if (sel) sel.value = kind;
     refreshArtifactPreview();
     syncArtifactActions();
@@ -2376,10 +2473,11 @@
     }
     var dest = artifactDest === 'guide' ? 'guide' : 'artifact';
     currentArtifact.dest = dest;
+    currentArtifact.title = clampArtTitle(currentArtifact.title || '');
     var handle = myHandle() || 'usuario';
     var prefix = dest === 'guide'
       ? 'guides.trujillomingorance.com/u/@' + handle + '/'
-      : 'ai.trujillomingorance.com/artifact/@' + handle + '/';
+      : 'ai.trujillomingorance.com/library/@' + handle + '/';
     var suggested = currentArtifact.slug || slugifyArtifact(currentArtifact.title) || ('art-' + Date.now().toString(36));
     var slug = window.prompt('URL pública: ' + prefix, suggested);
     if (!slug) return;
@@ -2396,7 +2494,8 @@
           slug: slug,
           content: currentArtifact.content,
           lang: currentArtifact.lang || 'markdown',
-          dest: dest
+          dest: dest,
+          extras: currentArtifact.extras || readArtExtras()
         })
       });
       var data = await res.json().catch(function() { return {}; });
@@ -2876,7 +2975,8 @@
         slug: rec.slug,
         url: rec.url,
         dest: rec.dest || 'artifact',
-        handle: rec.handle || ''
+        handle: rec.handle || '',
+        extras: rec.extras || { sources: [], resources: [], widgets: [] }
       }, { focus: true });
     } catch (err) {
       alert(err.message || 'No se pudo abrir el artifact');
@@ -2931,7 +3031,7 @@
       item.appendChild(top);
       var slugEl = document.createElement('div');
       slugEl.className = 'art-row-slug';
-      var destLabel = a.dest === 'guide' ? 'Guides' : 'Artifact';
+      var destLabel = a.dest === 'guide' ? 'Guides' : 'Library';
       slugEl.innerHTML = '<span class="art-row-dest">' + destLabel + '</span> · ' +
         escapeHtml((a.handle ? '@' + a.handle + '/' : '') + a.slug);
       item.appendChild(slugEl);
@@ -2945,7 +3045,7 @@
         e.stopPropagation();
         window.open(a.url || (a.dest === 'guide'
           ? ('https://guides.trujillomingorance.com/u/@' + (a.handle || '') + '/' + a.slug)
-          : ('/artifact/@' + (a.handle || '') + '/' + a.slug)), '_blank', 'noopener');
+          : ('/library/@' + (a.handle || '') + '/' + a.slug)), '_blank', 'noopener');
       });
       var preview = document.createElement('button');
       preview.type = 'button';
@@ -3412,6 +3512,21 @@
     }
     var btn = document.getElementById('idea-send-btn');
     if (btn) btn.disabled = true;
+    if (btn && btn.getAttribute('data-ticket')) {
+      fetch('/api/mail/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket: btn.getAttribute('data-ticket'), website: (document.getElementById('idea-website') || {}).value || '' })
+      }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+        .then(function(res) {
+          if (status) status.textContent = res.ok ? t('ideasOk') : (res.d.error || t('ideasErr'));
+          if (res.ok && textEl) textEl.value = '';
+          if (btn) { btn.removeAttribute('data-ticket'); btn.textContent = t('ideasSend') || 'Enviar a Alberto'; }
+        })
+        .catch(function() { if (status) status.textContent = t('ideasErr'); })
+        .then(function() { if (btn) btn.disabled = false; });
+      return;
+    }
     fetch('/api/ideas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3419,15 +3534,21 @@
         idea: text,
         email: (mailEl && mailEl.value) || (currentUser && currentUser.email) || '',
         name: (currentUser && currentUser.name) || '',
-        cat: ideaCat
+        cat: ideaCat,
+        website: (document.getElementById('idea-website') || {}).value || ''
       })
     }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
       .then(function(res) {
+        if (res.ok && res.d && res.d.needsClick && res.d.ticket) {
+          if (btn) { btn.setAttribute('data-ticket', res.d.ticket); btn.textContent = 'Haz clic para enviar el correo'; btn.disabled = false; }
+          if (status) status.textContent = 'Confirma que eres una persona: pulsa el botón otra vez para enviar.';
+          return;
+        }
         if (status) status.textContent = res.ok ? t('ideasOk') : (res.d.message || t('ideasErr'));
         if (res.ok && textEl) textEl.value = '';
+        if (btn) btn.disabled = false;
       })
-      .catch(function() { if (status) status.textContent = t('ideasErr'); })
-      .then(function() { if (btn) btn.disabled = false; });
+      .catch(function() { if (status) status.textContent = t('ideasErr'); if (btn) btn.disabled = false; });
   }
   function openSettingsModal(tab) {
     if (typeof tab !== 'string') tab = 'pane-general';
@@ -4026,11 +4147,30 @@
     var testEmailBtn = document.getElementById('test-email-btn');
     if (testEmailBtn) testEmailBtn.addEventListener('click', async function() {
       if (!authToken) return;
+      var st = document.getElementById('settings-status');
       try {
-        var res = await fetch('/api/auth/test-email', { method: 'POST', headers: { 'Authorization': 'Bearer ' + authToken } });
+        if (testEmailBtn.getAttribute('data-ticket')) {
+          var sent = await fetch('/api/mail/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+            body: JSON.stringify({ ticket: testEmailBtn.getAttribute('data-ticket') })
+          });
+          var sentData = await sent.json();
+          if (!sent.ok) throw new Error(sentData.error || t('error'));
+          testEmailBtn.removeAttribute('data-ticket');
+          testEmailBtn.textContent = t('testEmail') || 'Enviar correo de prueba';
+          if (st) { st.textContent = t('testEmailOk'); st.style.display = 'block'; }
+          return;
+        }
+        var res = await fetch('/api/auth/test-email', { method: 'POST', headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' }, body: '{}' });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || t('error'));
-        var st = document.getElementById('settings-status');
+        if (data.needsClick && data.ticket) {
+          testEmailBtn.setAttribute('data-ticket', data.ticket);
+          testEmailBtn.textContent = 'Haz clic para enviar el correo';
+          if (st) { st.textContent = 'Confirma que eres una persona y pulsa otra vez.'; st.style.display = 'block'; }
+          return;
+        }
         if (st) { st.textContent = t('testEmailOk'); st.style.display = 'block'; }
       } catch (err) { alert(err.message); }
     });
@@ -4070,8 +4210,23 @@
     }
     var artTitle = document.getElementById('art-title');
     if (artTitle) {
-      artTitle.addEventListener('input', function() { readArtifactDraft(); });
+      artTitle.addEventListener('input', function() {
+        if (artTitle.value.length > 72) artTitle.value = artTitle.value.slice(0, 72);
+        updateTitleCount();
+        readArtifactDraft();
+      });
     }
+    var extrasToggle = document.getElementById('art-extras-toggle');
+    var extrasBody = document.getElementById('art-extras-body');
+    if (extrasToggle && extrasBody) {
+      extrasToggle.addEventListener('click', function() {
+        extrasBody.hidden = !extrasBody.hidden;
+      });
+    }
+    ['art-sources', 'art-resources', 'art-widgets'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', function() { readArtifactDraft(); });
+    });
     var artEditor = document.getElementById('art-editor');
     if (artEditor) {
       artEditor.addEventListener('input', scheduleArtifactPreview);
