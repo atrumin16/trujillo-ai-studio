@@ -19,7 +19,7 @@
       --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
       --mono: "IBM Plex Mono", ui-monospace, monospace;
       --sb: 272px;
-      --art: 440px;
+      --art: 50vw;
     }
     html[data-theme="light"] {
       --bg: #f4f4f5;
@@ -627,18 +627,46 @@
     .disclaimer a { color: var(--muted); text-decoration: none; }
     .art-panel {
       width: 0; overflow: hidden; border-left: 0; background: var(--elev); color: var(--text); display: flex; flex-direction: column;
-      transition: width 0.2s ease; flex-shrink: 0;
+      transition: width 0.2s ease, flex-basis 0.2s ease; flex-shrink: 0;
     }
-    .art-panel.open { width: min(var(--art), 46vw); border-left: 1px solid var(--line); }
+    .art-panel.open {
+      width: 50vw; flex: 0 0 50vw; min-width: 460px; max-width: 54vw;
+      border-left: 1px solid var(--line); overflow: hidden;
+      box-shadow: -18px 0 40px rgba(0,0,0,0.18);
+    }
+    @media (max-width: 1100px) {
+      .art-panel.open { width: 52vw; flex-basis: 52vw; min-width: 400px; max-width: 58vw; }
+    }
     @media (max-width: 860px) {
-      .art-panel.open { position: fixed; inset: 0; width: 100%; z-index: 60; border-left: 0; }
+      .art-panel.open { position: fixed; inset: 0; width: 100%; flex-basis: 100%; max-width: none; min-width: 0; z-index: 60; border-left: 0; box-shadow: none; }
     }
-    .art-head { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .art-title { font-size: 0.84rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .art-format { background: var(--elev); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 0.72rem; padding: 5px 8px; font-family: inherit; }
-    .art-preview { flex: 1; width: 100%; border: 0; background: #fff; min-height: 0; }
-    .art-preview[hidden], .art-body[hidden] { display: none !important; }
-    .art-body { flex: 1; overflow: auto; padding: 14px; font-family: var(--mono); font-size: 0.8rem; line-height: 1.55; white-space: pre-wrap; }
+    .art-head {
+      flex: 0 0 auto; padding: 12px 14px 10px; border-bottom: 1px solid var(--line);
+      display: flex; flex-direction: column; gap: 8px; background: var(--elev); z-index: 2;
+    }
+    .art-head-top { display: flex; align-items: center; gap: 8px; }
+    .art-title-input {
+      flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line); color: var(--text);
+      border-radius: 8px; padding: 8px 10px; font-size: 0.9rem; font-weight: 650; font-family: inherit; outline: none;
+    }
+    .art-title-input:focus { border-color: var(--line-2); }
+    .art-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .art-toolbar .topbar-action-btn { flex: 0 0 auto; min-height: 34px; padding: 7px 12px; }
+    .art-format { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 0.75rem; padding: 7px 8px; font-family: inherit; min-width: 124px; min-height: 34px; }
+    .art-hint { font-size: 0.68rem; color: var(--dim); padding: 0 2px; line-height: 1.35; }
+    .topbar-action-btn:disabled,
+    .topbar-action-btn:disabled:hover {
+      opacity: 0.42; cursor: not-allowed; background: var(--elev); border-color: var(--line); color: var(--muted);
+    }
+    .art-split { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .art-editor {
+      flex: 1 1 52%; min-height: 0; width: 100%; box-sizing: border-box; resize: none; border: 0;
+      border-bottom: 1px solid var(--line); background: var(--bg); color: var(--text);
+      padding: 14px 16px; font-family: var(--mono); font-size: 0.82rem; line-height: 1.55; outline: none;
+    }
+    .art-preview { flex: 1 1 48%; min-height: 0; width: 100%; border: 0; background: #fff; }
+    .art-preview[hidden] { display: none !important; }
+    .art-split.no-preview .art-editor { border-bottom: 0; flex: 1 1 auto; }
     .modal-backdrop {
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 80;
       align-items: center; justify-content: center; padding: 16px;
