@@ -8,15 +8,15 @@ directory = "./public"
 binding = "ASSETS"
 html_handling = "none"
 not_found_handling = "none"
-# Edge routing for static assets
-run_worker_first = ["/*"]
+# Static /assets are free (no Worker). Worker only for HTML/API.
+run_worker_first = ["!/assets/*", "!/avatar.png", "!/favicon.ico", "/*"]
 
 [triggers]
 crons = ["0 7 * * *"]
 
 [observability]
 enabled = true
-head_sampling_rate = 0.1
+head_sampling_rate = 0.01
 
 [vars]
 GROQ_MODEL = "openai/gpt-oss-120b"

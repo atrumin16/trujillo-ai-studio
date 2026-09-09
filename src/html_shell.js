@@ -1,6 +1,6 @@
 import { ORIGIN, BRAND, jsonLdFor, hreflangLinks } from './seo.js'
 
-const ASSET_V = '42'
+const ASSET_V = '43'
 
 function esc(s) {
   return String(s || '')
@@ -99,7 +99,8 @@ export function htmlResponse(opts, status = 200, extraHeaders = {}) {
       'Content-Type': 'text/html; charset=UTF-8',
       'Cache-Control': isApp
         ? 'private, no-store'
-        : 'public, max-age=0, must-revalidate',
+        : 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800',
+      'CDN-Cache-Control': isApp ? 'no-store' : 'max-age=86400',
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       ...extraHeaders,

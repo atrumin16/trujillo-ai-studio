@@ -332,15 +332,32 @@ export default {
           headers.set('Cache-Control', 'public, max-age=3600');
           return new Response(assetRes.body, { status: assetRes.status, headers });
         }
-        const errorRes = await fetch(GATEWAY + '/404', {
-          headers: { 'User-Agent': request.headers.get('User-Agent') || 'Cloudflare-Worker' }
-        });
-        const html = await errorRes.text();
+        let html = '';
+        try {
+          const nfCache = caches.default;
+          const nfKey = new Request(GATEWAY + '/404-html-v1');
+          let nfRes = await nfCache.match(nfKey);
+          if (!nfRes) {
+            nfRes = await fetch(GATEWAY + '/404', {
+              headers: { 'User-Agent': request.headers.get('User-Agent') || 'Cloudflare-Worker' }
+            });
+            if (nfRes.ok) ctx.waitUntil(nfCache.put(nfKey, nfRes.clone()));
+          }
+          html = await nfRes.text();
+        } catch (e) {
+          html = '';
+        }
+        if (!html) {
+          return new Response('404 Subdominio No Encontrado - trujillomingorance.com', {
+            status: 404,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+          });
+        }
         return new Response(html, {
           status: 404,
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'Cache-Control': 'public, max-age=300, s-maxage=3600',
             'Access-Control-Allow-Origin': '*'
           }
         });
@@ -540,7 +557,7 @@ export default {
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, must-revalidate'
+          'Cache-Control': 'public, max-age=3600, s-maxage=86400'
         }
       });
       return res;
@@ -644,6 +661,80 @@ export default {
         });
       } catch (err) {
         return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    if (url.pathname === '/api/artifact' && request.method === 'POST') {
+      try {
+        const user = await getAuthedUser(request, env);
+        if (!user) {
+          return new Response(JSON.stringify({ error: 'Inicia sesión para publicar en guides.trujillomingorance.com' }), {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        const body = await request.json();
+        const title = String(body.title || '').trim().slice(0, 120);
+        const content = String(body.content || '');
+        const lang = String(body.lang || 'markdown').trim().slice(0, 32);
+        if (!title || content.length < 20) {
+          return new Response(JSON.stringify({ error: 'El artefacto necesita título y contenido' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        if (content.length > 180000) {
+          return new Response(JSON.stringify({ error: 'El artefacto supera el límite de 180 KB' }), {
+            status: 413,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        const slug = slugifyArtifact(body.slug || title);
+        if (!slug) {
+          return new Response(JSON.stringify({ error: 'Slug no válido' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        const record = {
+          slug,
+          title,
+          lang,
+          content,
+          description: String(body.description || content.replace(/\s+/g, ' ').slice(0, 180)),
+          author: user.email || user.id || 'owner',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        if (!env.BOT_MEMORY) {
+          return new Response(JSON.stringify({ error: 'KV no disponible' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const existingStr = await env.BOT_MEMORY.get('art:' + slug);
+        if (existingStr) {
+          try {
+            const existing = JSON.parse(existingStr);
+            record.createdAt = existing.createdAt || record.createdAt;
+          } catch (e) {}
+        }
+        await env.BOT_MEMORY.put('art:' + slug, JSON.stringify(record));
+        let index = [];
+        const indexStr = await env.BOT_MEMORY.get('art:index');
+        if (indexStr) {
+          try { index = JSON.parse(indexStr); } catch (e) { index = []; }
+        }
+        if (!Array.isArray(index)) index = [];
+        index = index.filter((item) => item && item.slug !== slug);
+        index.unshift({ slug, title, updatedAt: record.updatedAt, lang });
+        await env.BOT_MEMORY.put('art:index', JSON.stringify(index.slice(0, 200)));
+        const publicUrl = 'https://guides.trujillomingorance.com/a/' + slug;
+        return new Response(JSON.stringify({ ok: true, slug, url: publicUrl }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'publish_failed' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
     }
 
@@ -3791,6 +3882,17 @@ async function verifyJwtToken(token, secret) {
   } catch {
     return null;
   }
+}
+
+function slugifyArtifact(value) {
+  const slug = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+  return slug;
 }
 
 async function getCachedKvValue(kv, key) {

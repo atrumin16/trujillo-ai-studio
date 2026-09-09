@@ -822,6 +822,7 @@
       <div style="display:flex;gap:6px">
         <button type="button" class="topbar-action-btn" id="art-copy-btn">Copiar</button>
         <button type="button" class="topbar-action-btn" id="art-save-btn">Guardar</button>
+        <button type="button" class="topbar-action-btn" id="art-publish-btn">Publicar</button>
         <button type="button" class="icon-btn" id="art-close-btn">✕</button>
       </div>
     </div>
@@ -2133,6 +2134,57 @@
   function closeArtifact() {
     var panel = document.getElementById('art-panel');
     if (panel) panel.classList.remove('open');
+  }
+  function slugifyArtifact(value) {
+    return String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48);
+  }
+  async function publishArtifactToGuides() {
+    if (!currentArtifact) return;
+    if (!authToken) {
+      alert('Inicia sesión para publicar en guides.trujillomingorance.com');
+      return;
+    }
+    var suggested = slugifyArtifact(currentArtifact.title) || ('art-' + Date.now().toString(36));
+    var slug = window.prompt('URL pública: guides.trujillomingorance.com/a/', suggested);
+    if (!slug) return;
+    slug = slugifyArtifact(slug);
+    if (!slug) return;
+    var btn = document.getElementById('art-publish-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Publicando…'; }
+    try {
+      var res = await fetch('/api/artifact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+        body: JSON.stringify({
+          title: currentArtifact.title,
+          slug: slug,
+          content: currentArtifact.content,
+          lang: currentArtifact.lang || 'markdown'
+        })
+      });
+      var data = await res.json().catch(function() { return {}; });
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      if (btn) btn.textContent = 'Publicado';
+      if (data.url && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(data.url).catch(function() {});
+      }
+      if (data.url) window.open(data.url, '_blank', 'noopener');
+    } catch (err) {
+      alert(err.message || 'No se pudo publicar');
+      if (btn) btn.textContent = 'Publicar';
+    } finally {
+      if (btn) btn.disabled = false;
+      setTimeout(function() {
+        var b = document.getElementById('art-publish-btn');
+        if (b && b.textContent === 'Publicado') b.textContent = 'Publicar';
+      }, 2500);
+    }
   }
 
   async function handleSend() {
@@ -3588,6 +3640,8 @@
       addDocument({ title: currentArtifact.title, content: currentArtifact.content, type: 'artifact', lang: currentArtifact.lang });
       renderSidebar();
     });
+    var artPublishBtn = document.getElementById('art-publish-btn');
+    if (artPublishBtn) artPublishBtn.addEventListener('click', publishArtifactToGuides);
     document.querySelectorAll('.length-opt-btn').forEach(function(btn) {
       btn.addEventListener('click', function() { var mode = this.getAttribute('data-len'); if (mode) setLengthMode(mode); });
     });
