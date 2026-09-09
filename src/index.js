@@ -290,6 +290,9 @@ export default {
 
       const resHeaders = new Headers(proxyRes.headers);
       resHeaders.set('Access-Control-Allow-Origin', '*');
+      if (proxyRes.status >= 400) {
+        resHeaders.set('Cache-Control', 'no-store');
+      }
       return new Response(proxyRes.body, {
         status: proxyRes.status,
         statusText: proxyRes.statusText,
