@@ -8,8 +8,20 @@ directory = "./public"
 binding = "ASSETS"
 html_handling = "none"
 not_found_handling = "none"
-# Static /assets are free (no Worker). Worker only for HTML/API.
-run_worker_first = ["!/assets/*", "!/avatar.png", "!/favicon.ico", "/*"]
+# Skip Worker only for THIS app's static files. Do not use !/assets/*
+# or alberto/guides hashed /assets/main-*.css never get proxied.
+run_worker_first = [
+  "!/assets/app.js",
+  "!/assets/app.css",
+  "!/assets/site.js",
+  "!/assets/site.css",
+  "!/assets/i18n.js",
+  "!/assets/i18n/*",
+  "!/assets/icon.png",
+  "!/avatar.png",
+  "!/favicon.ico",
+  "/*"
+]
 
 [triggers]
 crons = ["0 7 * * *"]
