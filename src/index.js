@@ -312,9 +312,26 @@ export default {
     );
 
     if (!IS_AI_HOST && url.hostname.endsWith('trujillomingorance.com')) {
-      // Subdominio desconocido o no asignado -> error 404 dinámico
+      // Unmapped subdomain: serve the gateway 404 and its CSS/JS from the same origin.
+      const GATEWAY = 'https://domain-root-2r5.pages.dev';
+      const path = url.pathname;
+      const isNfAsset = path.startsWith('/css/') || path.startsWith('/js/') || path === '/avatar.png' || path === '/favicon.ico';
       try {
-        const errorRes = await fetch('https://domain-root-2r5.pages.dev/404', {
+        if (isNfAsset) {
+          const assetRes = await fetch(GATEWAY + path + url.search);
+          const headers = new Headers();
+          const type = path.endsWith('.css')
+            ? 'text/css; charset=utf-8'
+            : path.endsWith('.js')
+              ? 'application/javascript; charset=utf-8'
+              : path.endsWith('.png')
+                ? 'image/png'
+                : (assetRes.headers.get('Content-Type') || 'application/octet-stream');
+          headers.set('Content-Type', type);
+          headers.set('Cache-Control', 'public, max-age=3600');
+          return new Response(assetRes.body, { status: assetRes.status, headers });
+        }
+        const errorRes = await fetch(GATEWAY + '/404', {
           headers: { 'User-Agent': request.headers.get('User-Agent') || 'Cloudflare-Worker' }
         });
         const html = await errorRes.text();
