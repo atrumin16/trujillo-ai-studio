@@ -635,6 +635,8 @@
     }
     .art-head { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .art-title { font-size: 0.84rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .art-preview { flex: 1; width: 100%; border: 0; background: #fff; min-height: 0; }
+    .art-preview[hidden], .art-body[hidden] { display: none !important; }
     .art-body { flex: 1; overflow: auto; padding: 14px; font-family: var(--mono); font-size: 0.8rem; line-height: 1.55; white-space: pre-wrap; }
     .modal-backdrop {
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 80;
@@ -823,9 +825,12 @@
         <button type="button" class="topbar-action-btn" id="art-copy-btn">Copiar</button>
         <button type="button" class="topbar-action-btn" id="art-save-btn">Guardar</button>
         <button type="button" class="topbar-action-btn" id="art-publish-btn">Publicar</button>
+        <button type="button" class="topbar-action-btn" id="art-open-btn" hidden>Abrir</button>
+        <button type="button" class="topbar-action-btn" id="art-unpublish-btn" hidden>Despublicar</button>
         <button type="button" class="icon-btn" id="art-close-btn">✕</button>
       </div>
     </div>
+    <iframe class="art-preview" id="art-preview" hidden sandbox="allow-scripts allow-forms" title="Vista del artifact"></iframe>
     <pre class="art-body" id="art-body"></pre>
   </aside>
 </div>
@@ -2122,17 +2127,45 @@
     var first = (body.split('\n').find(function(l) { return l.trim(); }) || '').replace(/^[#/*\s-]+/, '').slice(0, 48);
     return first || ((lang || 'documento') + ' · Trujillo');
   }
+  function artifactKind(art) {
+    var l = String((art && art.lang) || '').toLowerCase();
+    var c = String((art && art.content) || '').trim();
+    if (l === 'svg' || /^<svg[\s>]/i.test(c)) return 'svg';
+    if (l === 'html' || l === 'htm' || /^<!doctype html/i.test(c) || /^<html[\s>]/i.test(c) || /^<(div|section|main|article|style)[\s>]/i.test(c)) return 'html';
+    return l === 'markdown' || l === 'md' ? 'markdown' : 'code';
+  }
+  function syncArtifactActions() {
+    var openBtn = document.getElementById('art-open-btn');
+    var unBtn = document.getElementById('art-unpublish-btn');
+    var pubBtn = document.getElementById('art-publish-btn');
+    var published = !!(currentArtifact && currentArtifact.url);
+    if (openBtn) openBtn.hidden = !published;
+    if (unBtn) unBtn.hidden = !published;
+    if (pubBtn) pubBtn.textContent = published ? 'Actualizar' : 'Publicar';
+  }
   function openArtifact(art) {
     currentArtifact = art;
     var panel = document.getElementById('art-panel');
     var title = document.getElementById('art-title');
     var body = document.getElementById('art-body');
-    if (title) title.textContent = art.title || 'Artefacto';
-    if (body) body.textContent = art.content || '';
+    var preview = document.getElementById('art-preview');
+    if (title) title.textContent = art.title || 'Artifact';
+    var kind = artifactKind(art);
+    if (preview && (kind === 'html' || kind === 'svg')) {
+      preview.hidden = false;
+      if (body) body.hidden = true;
+      preview.srcdoc = art.content || '';
+    } else {
+      if (preview) { preview.hidden = true; preview.srcdoc = ''; }
+      if (body) { body.hidden = false; body.textContent = art.content || ''; }
+    }
+    syncArtifactActions();
     if (panel) panel.classList.add('open');
   }
   function closeArtifact() {
     var panel = document.getElementById('art-panel');
+    var preview = document.getElementById('art-preview');
+    if (preview) preview.srcdoc = '';
     if (panel) panel.classList.remove('open');
   }
   function slugifyArtifact(value) {
@@ -2144,14 +2177,14 @@
       .replace(/^-+|-+$/g, '')
       .slice(0, 48);
   }
-  async function publishArtifactToGuides() {
+  async function publishArtifact() {
     if (!currentArtifact) return;
     if (!authToken) {
-      alert('Inicia sesión para publicar en guides.trujillomingorance.com');
+      alert('Inicia sesión para publicar en ai.trujillomingorance.com/artifact');
       return;
     }
-    var suggested = slugifyArtifact(currentArtifact.title) || ('art-' + Date.now().toString(36));
-    var slug = window.prompt('URL pública: guides.trujillomingorance.com/a/', suggested);
+    var suggested = currentArtifact.slug || slugifyArtifact(currentArtifact.title) || ('art-' + Date.now().toString(36));
+    var slug = window.prompt('URL pública: ai.trujillomingorance.com/artifact/', suggested);
     if (!slug) return;
     slug = slugifyArtifact(slug);
     if (!slug) return;
@@ -2170,7 +2203,9 @@
       });
       var data = await res.json().catch(function() { return {}; });
       if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-      if (btn) btn.textContent = 'Publicado';
+      currentArtifact.slug = data.slug || slug;
+      currentArtifact.url = data.url;
+      syncArtifactActions();
       if (data.url && navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(data.url).catch(function() {});
       }
@@ -2180,10 +2215,29 @@
       if (btn) btn.textContent = 'Publicar';
     } finally {
       if (btn) btn.disabled = false;
-      setTimeout(function() {
-        var b = document.getElementById('art-publish-btn');
-        if (b && b.textContent === 'Publicado') b.textContent = 'Publicar';
-      }, 2500);
+      syncArtifactActions();
+    }
+  }
+  async function unpublishArtifact() {
+    if (!currentArtifact || !currentArtifact.slug) return;
+    if (!authToken) { alert('Inicia sesión para despublicar'); return; }
+    if (!window.confirm('¿Despublicar /artifact/' + currentArtifact.slug + '?')) return;
+    var btn = document.getElementById('art-unpublish-btn');
+    if (btn) btn.disabled = true;
+    try {
+      var res = await fetch('/api/artifact/' + encodeURIComponent(currentArtifact.slug), {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + authToken }
+      });
+      var data = await res.json().catch(function() { return {}; });
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      currentArtifact.url = '';
+      currentArtifact.slug = '';
+      syncArtifactActions();
+    } catch (err) {
+      alert(err.message || 'No se pudo despublicar');
+    } finally {
+      if (btn) btn.disabled = false;
     }
   }
 
@@ -3641,7 +3695,13 @@
       renderSidebar();
     });
     var artPublishBtn = document.getElementById('art-publish-btn');
-    if (artPublishBtn) artPublishBtn.addEventListener('click', publishArtifactToGuides);
+    if (artPublishBtn) artPublishBtn.addEventListener('click', publishArtifact);
+    var artUnpublishBtn = document.getElementById('art-unpublish-btn');
+    if (artUnpublishBtn) artUnpublishBtn.addEventListener('click', unpublishArtifact);
+    var artOpenBtn = document.getElementById('art-open-btn');
+    if (artOpenBtn) artOpenBtn.addEventListener('click', function() {
+      if (currentArtifact && currentArtifact.url) window.open(currentArtifact.url, '_blank', 'noopener');
+    });
     document.querySelectorAll('.length-opt-btn').forEach(function(btn) {
       btn.addEventListener('click', function() { var mode = this.getAttribute('data-len'); if (mode) setLengthMode(mode); });
     });
