@@ -769,7 +769,7 @@ export default {
         }
         if (!Array.isArray(index)) index = [];
         index = index.filter((item) => item && item.slug !== slug);
-        index.unshift({ slug, title, updatedAt: record.updatedAt, lang });
+        index.unshift({ slug, title, updatedAt: record.updatedAt, lang, author: record.author });
         await env.BOT_MEMORY.put('art:index', JSON.stringify(index.slice(0, 200)));
         const publicUrl = 'https://ai.trujillomingorance.com/artifact/' + slug;
         return new Response(JSON.stringify({ ok: true, slug, url: publicUrl }), {
@@ -777,6 +777,94 @@ export default {
         });
       } catch (err) {
         return new Response(JSON.stringify({ error: err.message || 'publish_failed' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    if (url.pathname === '/api/artifact' && request.method === 'GET') {
+      try {
+        const user = await getAuthedUser(request, env);
+        if (!user) {
+          return new Response(JSON.stringify({ error: 'Inicia sesión', artifacts: [] }), {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        const email = String(user.email || '').toLowerCase();
+        const owner = isOwnerUser(email, env) || isOwnerUser(user.id, env);
+        let index = [];
+        if (env.BOT_MEMORY) {
+          const indexStr = await env.BOT_MEMORY.get('art:index');
+          if (indexStr) {
+            try { index = JSON.parse(indexStr); } catch (e) { index = []; }
+          }
+        }
+        const artifacts = (Array.isArray(index) ? index : []).filter(function (it) {
+          if (!it || !it.slug) return false;
+          const author = String(it.author || '').toLowerCase();
+          if (author) return author === email;
+          return owner;
+        }).map(function (it) {
+          return {
+            slug: it.slug,
+            title: it.title || it.slug,
+            lang: it.lang || 'markdown',
+            updatedAt: it.updatedAt || 0,
+            url: 'https://ai.trujillomingorance.com/artifact/' + it.slug
+          };
+        });
+        return new Response(JSON.stringify({ ok: true, artifacts }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'list_failed', artifacts: [] }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    if (url.pathname.startsWith('/api/artifact/') && request.method === 'GET') {
+      try {
+        const user = await getAuthedUser(request, env);
+        if (!user) {
+          return new Response(JSON.stringify({ error: 'Inicia sesión' }), {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        const slug = url.pathname.slice('/api/artifact/'.length).replace(/\/+$/, '');
+        if (!/^[a-z0-9-]{2,64}$/.test(slug) || !env.BOT_MEMORY) {
+          return new Response(JSON.stringify({ error: 'No encontrado' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        const raw = await env.BOT_MEMORY.get('art:' + slug);
+        if (!raw) {
+          return new Response(JSON.stringify({ error: 'No encontrado' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        let record = {};
+        try { record = JSON.parse(raw); } catch (e) { record = {}; }
+        const email = String(user.email || '').toLowerCase();
+        const author = String(record.author || '').toLowerCase();
+        if (author && author !== email && !isOwnerUser(email, env) && !isOwnerUser(user.id, env)) {
+          return new Response(JSON.stringify({ error: 'No encontrado' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        record.url = 'https://ai.trujillomingorance.com/artifact/' + slug;
+        return new Response(JSON.stringify({ ok: true, artifact: record }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'read_failed' }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
