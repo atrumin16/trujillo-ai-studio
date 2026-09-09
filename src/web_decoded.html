@@ -657,6 +657,13 @@
     .art-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .art-toolbar .topbar-action-btn { flex: 0 0 auto; min-height: 34px; padding: 7px 12px; }
     .art-format { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 0.75rem; padding: 7px 8px; font-family: inherit; min-width: 124px; min-height: 34px; }
+    .art-dest { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+    .art-dest-btn {
+      border: 0; background: transparent; color: var(--muted); padding: 6px 10px; border-radius: 8px;
+      font-size: 0.74rem; font-weight: 650; cursor: pointer; min-height: 30px;
+    }
+    .art-dest-btn.active { background: var(--invert); color: var(--invert-fg); }
+    .art-row-dest { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--blue); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; }
     .art-hint { font-size: 0.68rem; color: var(--dim); padding: 0 2px; line-height: 1.35; }
     .topbar-action-btn:disabled,
     .topbar-action-btn:disabled:hover {
@@ -860,13 +867,17 @@
       </div>
       <div class="art-toolbar">
         <select id="art-format" class="art-format" title="Formato" aria-label="Formato del artifact"></select>
+        <div class="art-dest" role="radiogroup" aria-label="Dónde publicar">
+          <button type="button" class="art-dest-btn active" data-dest="artifact" id="dest-artifact-btn">Artifact</button>
+          <button type="button" class="art-dest-btn" data-dest="guide" id="dest-guide-btn">Guides</button>
+        </div>
         <button type="button" class="topbar-action-btn" id="art-copy-btn">Copiar</button>
         <button type="button" class="topbar-action-btn" id="art-save-btn">Guardar</button>
         <button type="button" class="topbar-action-btn primary" id="art-publish-btn">Publicar</button>
         <button type="button" class="topbar-action-btn" id="art-open-btn">Abrir</button>
         <button type="button" class="topbar-action-btn" id="art-unpublish-btn">Despublicar</button>
       </div>
-      <p class="art-hint">La IA deja una base. Escribe o pega lo que quieras; la vista se actualiza al vuelo.</p>
+      <p class="art-hint" id="art-dest-hint">La IA deja una base. Elige Artifact o Guides. Hace falta una cuenta registrada; no se mezcla con el de otros.</p>
     </div>
     <div class="art-split" id="art-split">
       <textarea class="art-editor" id="art-editor" spellcheck="false" placeholder="Escribe aquí el contenido. La IA genera una base; tú la editas." aria-label="Editor del artifact"></textarea>
@@ -1474,6 +1485,7 @@
   var STOP_ICON = '<svg width="14" height="14" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>';
   var currentArtifact = null;
   var artPreviewTimer = 0;
+  var artifactDest = 'artifact';
   var shareReadOnly = false;
   var showArchived = false;
 
@@ -2284,6 +2296,29 @@
       refreshArtifactPreview();
     }, 220);
   }
+  function requireAccount(action) {
+    if (authToken && currentUser && (currentUser.email || currentUser.id)) return true;
+    alert('Crea una cuenta o inicia sesión para ' + (action || 'publicar') + '. Las publicaciones van a tu @usuario y no se mezclan con las de otros.');
+    if (typeof openSettingsModal === 'function') openSettingsModal('pane-account');
+    return false;
+  }
+  function myHandle() {
+    return (currentUser && currentUser.handle) || '';
+  }
+  function setArtifactDest(dest, persist) {
+    artifactDest = dest === 'guide' ? 'guide' : 'artifact';
+    if (persist && currentArtifact) currentArtifact.dest = artifactDest;
+    document.querySelectorAll('.art-dest-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-dest') === artifactDest);
+    });
+    var hint = document.getElementById('art-dest-hint');
+    var h = myHandle() || 'usuario';
+    if (hint) {
+      hint.textContent = artifactDest === 'guide'
+        ? 'Se publica en Guides, en tu tablero /u/@' + h + '/… Hace falta cuenta registrada.'
+        : 'Se publica en Artifact, en tu tablero /artifact/@' + h + '/… Hace falta cuenta registrada.';
+    }
+  }
   function syncArtifactActions() {
     var openBtn = document.getElementById('art-open-btn');
     var unBtn = document.getElementById('art-unpublish-btn');
@@ -2292,9 +2327,12 @@
     if (openBtn) { openBtn.hidden = false; openBtn.disabled = !published; }
     if (unBtn) { unBtn.hidden = false; unBtn.disabled = !published; }
     if (pubBtn) { pubBtn.hidden = false; pubBtn.textContent = published ? 'Actualizar' : 'Publicar'; }
+    setArtifactDest((currentArtifact && currentArtifact.dest) || artifactDest, false);
   }
   function openArtifact(art, opts) {
-    currentArtifact = art || { title: 'Artifact', content: '', lang: 'markdown' };
+    currentArtifact = art || { title: 'Artifact', content: '', lang: 'markdown', dest: artifactDest };
+    if (!currentArtifact.dest) currentArtifact.dest = artifactDest;
+    setArtifactDest(currentArtifact.dest, false);
     fillArtFormatSelect();
     var kind = artifactKind(currentArtifact);
     currentArtifact.lang = kind;
@@ -2331,16 +2369,19 @@
   async function publishArtifact() {
     readArtifactDraft();
     if (!currentArtifact) return;
-    if (!authToken) {
-      alert('Inicia sesión para publicar en ai.trujillomingorance.com/artifact');
-      return;
-    }
+    if (!requireAccount('publicar')) return;
     if (!(currentArtifact.content || '').trim()) {
       alert('Escribe algo en el editor antes de publicar.');
       return;
     }
+    var dest = artifactDest === 'guide' ? 'guide' : 'artifact';
+    currentArtifact.dest = dest;
+    var handle = myHandle() || 'usuario';
+    var prefix = dest === 'guide'
+      ? 'guides.trujillomingorance.com/u/@' + handle + '/'
+      : 'ai.trujillomingorance.com/artifact/@' + handle + '/';
     var suggested = currentArtifact.slug || slugifyArtifact(currentArtifact.title) || ('art-' + Date.now().toString(36));
-    var slug = window.prompt('URL pública: ai.trujillomingorance.com/artifact/', suggested);
+    var slug = window.prompt('URL pública: ' + prefix, suggested);
     if (!slug) return;
     slug = slugifyArtifact(slug);
     if (!slug) return;
@@ -2354,13 +2395,21 @@
           title: currentArtifact.title,
           slug: slug,
           content: currentArtifact.content,
-          lang: currentArtifact.lang || 'markdown'
+          lang: currentArtifact.lang || 'markdown',
+          dest: dest
         })
       });
       var data = await res.json().catch(function() { return {}; });
       if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
       currentArtifact.slug = data.slug || slug;
       currentArtifact.url = data.url;
+      currentArtifact.dest = data.dest || dest;
+      currentArtifact.handle = data.handle || handle;
+      if (data.user) {
+        currentUser = data.user;
+        try { localStorage.setItem('trujillo_ai_user', JSON.stringify(currentUser)); } catch (e) {}
+        updateUserUI();
+      }
       syncArtifactActions();
       if (data.url && navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(data.url).catch(function() {});
@@ -2377,12 +2426,13 @@
   }
   async function unpublishArtifact() {
     if (!currentArtifact || !currentArtifact.slug) return;
-    if (!authToken) { alert('Inicia sesión para despublicar'); return; }
-    if (!window.confirm('¿Despublicar /artifact/' + currentArtifact.slug + '?')) return;
+    if (!requireAccount('despublicar')) return;
+    var dest = currentArtifact.dest === 'guide' ? 'guide' : 'artifact';
+    if (!window.confirm('¿Despublicar ' + (currentArtifact.url || currentArtifact.slug) + '?')) return;
     var btn = document.getElementById('art-unpublish-btn');
     if (btn) btn.disabled = true;
     try {
-      var res = await fetch('/api/artifact/' + encodeURIComponent(currentArtifact.slug), {
+      var res = await fetch('/api/artifact/' + encodeURIComponent(currentArtifact.slug) + '?dest=' + dest, {
         method: 'DELETE',
         headers: { 'Authorization': 'Bearer ' + authToken }
       });
@@ -2799,16 +2849,21 @@
       var res = await fetch('/api/artifact', { headers: { 'Authorization': 'Bearer ' + authToken } });
       var data = await res.json().catch(function() { return {}; });
       publishedArtifacts = Array.isArray(data.artifacts) ? data.artifacts : [];
+      if (data.handle && currentUser) {
+        currentUser.handle = data.handle;
+        try { localStorage.setItem('trujillo_ai_user', JSON.stringify(currentUser)); } catch (e2) {}
+        updateUserUI();
+      }
     } catch (e) {
       publishedArtifacts = [];
     }
     renderSidebar();
   }
 
-  async function openPublishedArtifact(slug) {
+  async function openPublishedArtifact(slug, dest) {
     if (!authToken || !slug) return;
     try {
-      var res = await fetch('/api/artifact/' + encodeURIComponent(slug), {
+      var res = await fetch('/api/artifact/' + encodeURIComponent(slug) + '?dest=' + encodeURIComponent(dest || 'artifact'), {
         headers: { 'Authorization': 'Bearer ' + authToken }
       });
       var data = await res.json().catch(function() { return {}; });
@@ -2819,7 +2874,9 @@
         content: rec.content,
         lang: rec.lang || 'markdown',
         slug: rec.slug,
-        url: rec.url
+        url: rec.url,
+        dest: rec.dest || 'artifact',
+        handle: rec.handle || ''
       }, { focus: true });
     } catch (err) {
       alert(err.message || 'No se pudo abrir el artifact');
@@ -2848,7 +2905,7 @@
     if (!authToken) {
       var need = document.createElement('div');
       need.className = 'empty-side';
-      need.textContent = 'Inicia sesión para ver tus artifacts publicados.';
+      need.textContent = 'Crea una cuenta o inicia sesión. Solo verás lo tuyo, firmado con @usuario.';
       list.appendChild(need);
       return;
     }
@@ -2874,7 +2931,9 @@
       item.appendChild(top);
       var slugEl = document.createElement('div');
       slugEl.className = 'art-row-slug';
-      slugEl.textContent = (a.lang || 'md') + ' · /artifact/' + a.slug;
+      var destLabel = a.dest === 'guide' ? 'Guides' : 'Artifact';
+      slugEl.innerHTML = '<span class="art-row-dest">' + destLabel + '</span> · ' +
+        escapeHtml((a.handle ? '@' + a.handle + '/' : '') + a.slug);
       item.appendChild(slugEl);
       var actions = document.createElement('div');
       actions.className = 'art-row-actions';
@@ -2884,7 +2943,9 @@
       openPub.textContent = 'Abrir';
       openPub.addEventListener('click', function(e) {
         e.stopPropagation();
-        window.open(a.url || ('/artifact/' + a.slug), '_blank', 'noopener');
+        window.open(a.url || (a.dest === 'guide'
+          ? ('https://guides.trujillomingorance.com/u/@' + (a.handle || '') + '/' + a.slug)
+          : ('/artifact/@' + (a.handle || '') + '/' + a.slug)), '_blank', 'noopener');
       });
       var preview = document.createElement('button');
       preview.type = 'button';
@@ -2892,7 +2953,7 @@
       preview.textContent = 'Ver';
       preview.addEventListener('click', function(e) {
         e.stopPropagation();
-        openPublishedArtifact(a.slug);
+        openPublishedArtifact(a.slug, a.dest);
       });
       var del = document.createElement('button');
       del.type = 'button';
@@ -2900,14 +2961,14 @@
       del.textContent = 'Despublicar';
       del.addEventListener('click', function(e) {
         e.stopPropagation();
-        currentArtifact = { title: a.title, slug: a.slug, url: a.url, content: '', lang: a.lang };
+        currentArtifact = { title: a.title, slug: a.slug, url: a.url, content: '', lang: a.lang, dest: a.dest || 'artifact', handle: a.handle };
         unpublishArtifact().then(function() { loadPublishedArtifacts(); });
       });
       actions.appendChild(preview);
       actions.appendChild(openPub);
       actions.appendChild(del);
       item.appendChild(actions);
-      item.addEventListener('click', function() { openPublishedArtifact(a.slug); });
+      item.addEventListener('click', function() { openPublishedArtifact(a.slug, a.dest); });
       list.appendChild(item);
     });
   }
@@ -3561,7 +3622,10 @@
     if (currentUser && authToken) {
       var name = currentUser.name || currentUser.email;
       if (nameEl) nameEl.textContent = name;
-      if (tierEl) tierEl.textContent = currentUser.tier === 'enterprise' ? 'Enterprise' : t('verified');
+      if (tierEl) {
+        if (currentUser.handle) tierEl.textContent = '@' + currentUser.handle;
+        else tierEl.textContent = currentUser.tier === 'enterprise' ? 'Enterprise' : t('verified');
+      }
       if (topText) topText.textContent = name.split(' ')[0];
       if (letter) letter.textContent = (name[0] || 'T').toUpperCase();
       if (topLetter) { topLetter.hidden = false; topLetter.textContent = (name[0] || 'T').toUpperCase(); }
@@ -3726,6 +3790,18 @@
       fillLangSelect();
       renderModelPicker();
       applyI18n();
+      if (authToken) {
+        fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + authToken } })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d && d.user) {
+              currentUser = d.user;
+              try { localStorage.setItem('trujillo_ai_user', JSON.stringify(currentUser)); } catch (e) {}
+              updateUserUI();
+              setArtifactDest(artifactDest, false);
+            }
+          }).catch(function() {});
+      }
       if (isWebSearch) {
         var wsb = document.getElementById('web-search-pill');
         if (wsb) wsb.classList.add('active');
@@ -3982,6 +4058,9 @@
       renderSidebar();
     });
     fillArtFormatSelect();
+    document.querySelectorAll('.art-dest-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { setArtifactDest(btn.getAttribute('data-dest'), true); });
+    });
     var artFormat = document.getElementById('art-format');
     if (artFormat) {
       artFormat.addEventListener('change', function() {

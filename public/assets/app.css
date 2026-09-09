@@ -653,6 +653,13 @@
     .art-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .art-toolbar .topbar-action-btn { flex: 0 0 auto; min-height: 34px; padding: 7px 12px; }
     .art-format { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 0.75rem; padding: 7px 8px; font-family: inherit; min-width: 124px; min-height: 34px; }
+    .art-dest { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+    .art-dest-btn {
+      border: 0; background: transparent; color: var(--muted); padding: 6px 10px; border-radius: 8px;
+      font-size: 0.74rem; font-weight: 650; cursor: pointer; min-height: 30px;
+    }
+    .art-dest-btn.active { background: var(--invert); color: var(--invert-fg); }
+    .art-row-dest { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--blue); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; }
     .art-hint { font-size: 0.68rem; color: var(--dim); padding: 0 2px; line-height: 1.35; }
     .topbar-action-btn:disabled,
     .topbar-action-btn:disabled:hover {

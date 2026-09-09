@@ -2,6 +2,25 @@
 // Domain: ai.trujillomingorance.com
 import { htmlResponse } from './html_shell.js';
 import { renderArtifactPage, renderArtifactIndex, renderArtifactMissing } from './artifact_page.js';
+import {
+  ARTIFACT_ORIGIN,
+  GUIDES_ORIGIN,
+  authorBoardUrl,
+  indexItem,
+  normalizeDest,
+  ownsRecord,
+  parseArtifactPath,
+  publicIndexKey,
+  publicUrl,
+  readJsonArray,
+  recordKey,
+  resolvePicture,
+  slugifyHandle,
+  slugifySlug,
+  suggestedHandle,
+  userIndexKey,
+  writeJson
+} from './publish.js';
 import { pageMeta, robotsTxt, sitemapXml, llmsTxt, securityTxt, webManifest, SITE_PAGES } from './seo.js';
 import { pickLang, publicGeo, langMeta, LANG_IDS } from './langs.js';
 import {
@@ -584,33 +603,32 @@ export default {
 
     const artBase = (originalPath.replace(/\/+$/, '') || '/');
     if (isGetOrHead && (artBase === '/artifact' || artBase.startsWith('/artifact/'))) {
-      const slug = artBase === '/artifact' ? '' : artBase.slice('/artifact/'.length).split('/')[0];
+      const parsed = parseArtifactPath(artBase);
       let body = '';
       let status = 200;
-      if (!slug) {
-        let index = [];
-        if (env.BOT_MEMORY) {
-          const indexStr = await env.BOT_MEMORY.get('art:index');
-          if (indexStr) {
-            try { index = JSON.parse(indexStr); } catch (e) { index = []; }
-          }
-        }
-        body = renderArtifactIndex(Array.isArray(index) ? index : []);
-      } else if (!/^[a-z0-9-]{2,64}$/.test(slug)) {
+      if (!parsed || parsed.kind === 'missing') {
         body = renderArtifactMissing();
         status = 404;
+      } else if (parsed.kind === 'global') {
+        let index = await readJsonArray(env.BOT_MEMORY, publicIndexKey('artifact'));
+        if (!index.length) index = await readJsonArray(env.BOT_MEMORY, 'art:index');
+        body = renderArtifactIndex(index);
+      } else if (parsed.kind === 'author') {
+        const index = await readJsonArray(env.BOT_MEMORY, userIndexKey('artifact', parsed.handle));
+        const meta = index[0] || { handle: parsed.handle };
+        body = renderArtifactIndex(index, {
+          handle: parsed.handle,
+          authorName: meta.authorName,
+          authorPicture: meta.authorPicture
+        });
       } else {
-        let record = null;
-        if (env.BOT_MEMORY) {
-          const raw = await env.BOT_MEMORY.get('art:' + slug);
-          if (raw) {
-            try { record = JSON.parse(raw); } catch (e) { record = null; }
-          }
-        }
+        let record = await loadPubRecord(env, 'artifact', parsed.handle || '', parsed.slug);
         if (!record) {
           body = renderArtifactMissing();
           status = 404;
         } else {
+          if (!record.handle && parsed.handle) record.handle = parsed.handle;
+          if (!record.dest) record.dest = 'artifact';
           body = renderArtifactPage(record);
         }
       }
@@ -619,7 +637,7 @@ export default {
         headers: {
           ...corsHeaders,
           'Content-Type': 'text/html; charset=UTF-8',
-          'Cache-Control': status === 200 ? 'public, max-age=30, s-maxage=300' : 'no-store',
+          'Cache-Control': status === 200 ? 'public, max-age=30, s-maxage=120' : 'no-store',
           'X-Content-Type-Options': 'nosniff',
           'X-Frame-Options': 'SAMEORIGIN'
         }
@@ -713,67 +731,94 @@ export default {
       try {
         const user = await getAuthedUser(request, env);
         if (!user) {
-          return new Response(JSON.stringify({ error: 'Inicia sesión para publicar el artifact' }), {
+          return new Response(JSON.stringify({ error: 'Crea una cuenta o inicia sesión para publicar en Artifact o Guides' }), {
             status: 401,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
+        if (!env.BOT_MEMORY) {
+          return new Response(JSON.stringify({ error: 'KV no disponible' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const handle = await ensureUserHandle(env, user);
         const body = await request.json();
+        const dest = normalizeDest(body.dest || body.destination);
         const title = String(body.title || '').trim().slice(0, 120);
         const content = String(body.content || '');
         const lang = String(body.lang || body.format || 'markdown').trim().slice(0, 32);
         if (!title || !content.trim()) {
-          return new Response(JSON.stringify({ error: 'El artefacto necesita título y contenido' }), {
+          return new Response(JSON.stringify({ error: 'Necesita título y contenido' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
         if (content.length > 180000) {
-          return new Response(JSON.stringify({ error: 'El artefacto supera el límite de 180 KB' }), {
+          return new Response(JSON.stringify({ error: 'Supera el límite de 180 KB' }), {
             status: 413,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        const slug = slugifyArtifact(body.slug || title);
-        if (!slug) {
+        const slug = slugifySlug(body.slug || title);
+        if (!slug || slug.length < 2) {
           return new Response(JSON.stringify({ error: 'Slug no válido' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
+        const key = recordKey(dest, handle, slug);
+        const existingNs = await loadJsonRecord(env, key);
+        if (existingNs && !ownsRecord(user, existingNs)) {
+          return new Response(JSON.stringify({ error: 'Esa URL ya pertenece a otra cuenta' }), {
+            status: 409,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        if (dest === 'artifact') {
+          const legacy = await loadJsonRecord(env, 'art:' + slug);
+          if (legacy && !ownsRecord(user, legacy)) {
+            return new Response(JSON.stringify({ error: 'Esa URL ya pertenece a otra cuenta' }), {
+              status: 409,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+        }
+        const picture = resolvePicture(user, handle, dest === 'guide' ? GUIDES_ORIGIN : ARTIFACT_ORIGIN);
+        const now = Date.now();
         const record = {
           slug,
           title,
           lang,
+          dest,
           content,
           description: String(body.description || content.replace(/\s+/g, ' ').slice(0, 180)),
-          author: String(user.email || user.id || '').toLowerCase() || 'owner',
+          handle,
+          author: String(user.email || user.id || '').toLowerCase(),
           authorId: user.id || '',
-          createdAt: Date.now(),
-          updatedAt: Date.now()
+          authorName: String(user.name || handle).slice(0, 80),
+          authorPicture: picture,
+          createdAt: (existingNs && existingNs.createdAt) || now,
+          updatedAt: now
         };
-        if (!env.BOT_MEMORY) {
-          return new Response(JSON.stringify({ error: 'KV no disponible' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        await env.BOT_MEMORY.put(key, JSON.stringify(record));
+        if (dest === 'artifact') {
+          const legacy = await loadJsonRecord(env, 'art:' + slug);
+          if (!legacy || ownsRecord(user, legacy)) {
+            await env.BOT_MEMORY.put('art:' + slug, JSON.stringify(record));
+          }
         }
-        const existingStr = await env.BOT_MEMORY.get('art:' + slug);
-        if (existingStr) {
-          try {
-            const existing = JSON.parse(existingStr);
-            record.createdAt = existing.createdAt || record.createdAt;
-          } catch (e) {}
+        await upsertIndex(env, userIndexKey(dest, handle), indexItem(record), slug);
+        await upsertIndex(env, publicIndexKey(dest), indexItem(record), slug, handle);
+        if (dest === 'artifact') {
+          await upsertIndex(env, 'art:index', { slug, title, updatedAt: now, lang, author: record.author, handle }, slug);
         }
-        await env.BOT_MEMORY.put('art:' + slug, JSON.stringify(record));
-        let index = [];
-        const indexStr = await env.BOT_MEMORY.get('art:index');
-        if (indexStr) {
-          try { index = JSON.parse(indexStr); } catch (e) { index = []; }
-        }
-        if (!Array.isArray(index)) index = [];
-        index = index.filter((item) => item && item.slug !== slug);
-        index.unshift({ slug, title, updatedAt: record.updatedAt, lang, author: record.author });
-        await env.BOT_MEMORY.put('art:index', JSON.stringify(index.slice(0, 200)));
-        const publicUrl = 'https://ai.trujillomingorance.com/artifact/' + slug;
-        return new Response(JSON.stringify({ ok: true, slug, url: publicUrl }), {
+        const urlOut = publicUrl(dest, handle, slug);
+        return new Response(JSON.stringify({
+          ok: true,
+          slug,
+          dest,
+          handle,
+          url: urlOut,
+          user: publicUser(user)
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
         });
       } catch (err) {
@@ -788,51 +833,50 @@ export default {
       try {
         const user = await getAuthedUser(request, env);
         if (!user) {
-          return new Response(JSON.stringify({ error: 'Inicia sesión', artifacts: [] }), {
+          return new Response(JSON.stringify({ error: 'Crea una cuenta o inicia sesión', artifacts: [] }), {
             status: 401,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
+        const handle = await ensureUserHandle(env, user);
         const email = String(user.email || '').toLowerCase();
         const uid = String(user.id || '').toLowerCase();
         const owner = isOwnerUser(email, env) || isOwnerUser(uid, env);
-        let index = [];
-        if (env.BOT_MEMORY) {
-          const indexStr = await env.BOT_MEMORY.get('art:index');
-          if (indexStr) {
-            try { index = JSON.parse(indexStr); } catch (e) { index = []; }
-          }
-        }
-        if (!Array.isArray(index)) index = [];
-        const missing = index.filter((it) => it && it.slug && !it.author).slice(0, 30);
-        for (const it of missing) {
-          try {
-            const raw = await env.BOT_MEMORY.get('art:' + it.slug);
-            if (!raw) continue;
-            const rec = JSON.parse(raw);
-            it.author = rec.author || rec.authorId || '';
-            if (!it.title) it.title = rec.title;
-            if (!it.lang) it.lang = rec.lang;
-          } catch (e) {}
-        }
-        const artifacts = index.filter(function (it) {
-          if (!it || !it.slug) return false;
-          const author = String(it.author || '').toLowerCase();
-          if (!author) return true;
-          if (email && (author === email || author === uid)) return true;
-          if (uid && author === uid) return true;
-          if (owner) return true;
-          return false;
-        }).map(function (it) {
-          return {
+        const mine = [];
+        const seen = new Set();
+        const pushMine = (it, destFallback) => {
+          if (!it || !it.slug) return;
+          const dest = normalizeDest(it.dest || destFallback);
+          const h = slugifyHandle(it.handle || handle);
+          const k = dest + ':' + h + ':' + it.slug;
+          if (seen.has(k)) return;
+          seen.add(k);
+          mine.push({
             slug: it.slug,
             title: it.title || it.slug,
             lang: it.lang || 'markdown',
+            dest,
+            handle: h,
+            authorName: it.authorName || user.name || h,
+            authorPicture: it.authorPicture || resolvePicture(user, h, dest === 'guide' ? GUIDES_ORIGIN : ARTIFACT_ORIGIN),
             updatedAt: it.updatedAt || 0,
-            url: 'https://ai.trujillomingorance.com/artifact/' + it.slug
-          };
-        });
-        return new Response(JSON.stringify({ ok: true, artifacts }), {
+            url: publicUrl(dest, h, it.slug)
+          });
+        };
+        (await readJsonArray(env.BOT_MEMORY, userIndexKey('artifact', handle))).forEach((it) => pushMine(it, 'artifact'));
+        (await readJsonArray(env.BOT_MEMORY, userIndexKey('guide', handle))).forEach((it) => pushMine(it, 'guide'));
+        const legacy = await readJsonArray(env.BOT_MEMORY, 'art:index');
+        for (const it of legacy) {
+          if (!it || !it.slug) continue;
+          const author = String(it.author || '').toLowerCase();
+          const mineLegacy = author
+            ? (author === email || author === uid || author === handle)
+            : owner;
+          if (!mineLegacy) continue;
+          pushMine({ ...it, dest: 'artifact', handle: it.handle || handle }, 'artifact');
+        }
+        mine.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        return new Response(JSON.stringify({ ok: true, handle, artifacts: mine }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
         });
       } catch (err) {
@@ -847,36 +891,39 @@ export default {
       try {
         const user = await getAuthedUser(request, env);
         if (!user) {
-          return new Response(JSON.stringify({ error: 'Inicia sesión' }), {
+          return new Response(JSON.stringify({ error: 'Crea una cuenta o inicia sesión' }), {
             status: 401,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        const slug = url.pathname.slice('/api/artifact/'.length).replace(/\/+$/, '');
-        if (!/^[a-z0-9-]{2,64}$/.test(slug) || !env.BOT_MEMORY) {
+        const handle = await ensureUserHandle(env, user);
+        const dest = normalizeDest(url.searchParams.get('dest'));
+        const slug = slugifySlug(url.pathname.slice('/api/artifact/'.length).replace(/\/+$/, ''));
+        if (!slug || !env.BOT_MEMORY) {
           return new Response(JSON.stringify({ error: 'No encontrado' }), {
             status: 404,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        const raw = await env.BOT_MEMORY.get('art:' + slug);
-        if (!raw) {
+        let record = await loadPubRecord(env, dest, handle, slug);
+        if (!record && dest === 'artifact') {
+          record = await loadPubRecord(env, 'guide', handle, slug);
+        }
+        if (!record) {
           return new Response(JSON.stringify({ error: 'No encontrado' }), {
             status: 404,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        let record = {};
-        try { record = JSON.parse(raw); } catch (e) { record = {}; }
-        const email = String(user.email || '').toLowerCase();
-        const author = String(record.author || '').toLowerCase();
-        if (author && author !== email && !isOwnerUser(email, env) && !isOwnerUser(user.id, env)) {
+        if (!ownsRecord(user, record)) {
           return new Response(JSON.stringify({ error: 'No encontrado' }), {
             status: 404,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        record.url = 'https://ai.trujillomingorance.com/artifact/' + slug;
+        record.dest = record.dest || dest;
+        record.handle = record.handle || handle;
+        record.url = publicUrl(record.dest, record.handle, slug);
         return new Response(JSON.stringify({ ok: true, artifact: record }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
         });
@@ -892,46 +939,49 @@ export default {
       try {
         const user = await getAuthedUser(request, env);
         if (!user) {
-          return new Response(JSON.stringify({ error: 'Inicia sesión para despublicar' }), {
+          return new Response(JSON.stringify({ error: 'Crea una cuenta o inicia sesión para despublicar' }), {
             status: 401,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        const slug = url.pathname.slice('/api/artifact/'.length).replace(/\/+$/, '');
-        if (!/^[a-z0-9-]{2,64}$/.test(slug) || !env.BOT_MEMORY) {
+        const handle = await ensureUserHandle(env, user);
+        const dest = normalizeDest(url.searchParams.get('dest'));
+        const slug = slugifySlug(url.pathname.slice('/api/artifact/'.length).replace(/\/+$/, ''));
+        if (!slug || !env.BOT_MEMORY) {
           return new Response(JSON.stringify({ error: 'Slug no válido' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        const raw = await env.BOT_MEMORY.get('art:' + slug);
-        if (!raw) {
-          return new Response(JSON.stringify({ ok: true, slug }), {
+        const key = recordKey(dest, handle, slug);
+        const namespaced = await loadJsonRecord(env, key);
+        const legacy = dest === 'artifact' ? await loadJsonRecord(env, 'art:' + slug) : null;
+        const record = namespaced || legacy;
+        if (!record) {
+          return new Response(JSON.stringify({ ok: true, slug, dest }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        let record = {};
-        try { record = JSON.parse(raw); } catch (e) { record = {}; }
-        const email = String(user.email || '').toLowerCase();
-        const author = String(record.author || '').toLowerCase();
-        if (author && author !== email && !isOwnerUser(email, env) && !isOwnerUser(user.id, env)) {
-          return new Response(JSON.stringify({ error: 'No puedes despublicar este artifact' }), {
+        if (!ownsRecord(user, record)) {
+          return new Response(JSON.stringify({ error: 'No puedes despublicar el contenido de otra cuenta' }), {
             status: 403,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        await env.BOT_MEMORY.delete('art:' + slug);
-        const indexStr = await env.BOT_MEMORY.get('art:index');
-        let index = [];
-        if (indexStr) {
-          try { index = JSON.parse(indexStr); } catch (e) { index = []; }
-        }
-        await env.BOT_MEMORY.put('art:index', JSON.stringify((Array.isArray(index) ? index : []).filter((it) => it && it.slug !== slug)));
+        await env.BOT_MEMORY.delete(key);
+        if (legacy && ownsRecord(user, legacy)) await env.BOT_MEMORY.delete('art:' + slug);
+        await dropFromIndex(env, userIndexKey(dest, handle), slug);
+        await dropFromIndex(env, publicIndexKey(dest), slug, handle);
+        if (dest === 'artifact') await dropFromIndex(env, 'art:index', slug);
         try {
-          await caches.default.delete(new Request('https://ai.trujillomingorance.com/artifact/' + slug));
-          await caches.default.delete(new Request('https://ai.trujillomingorance.com/artifact'));
+          await caches.default.delete(new Request(publicUrl(dest, handle, slug)));
+          await caches.default.delete(new Request(authorBoardUrl(dest, handle)));
+          if (dest === 'artifact') {
+            await caches.default.delete(new Request(ARTIFACT_ORIGIN + '/artifact/' + slug));
+            await caches.default.delete(new Request(ARTIFACT_ORIGIN + '/artifact'));
+          }
         } catch (e) {}
-        return new Response(JSON.stringify({ ok: true, slug }), {
+        return new Response(JSON.stringify({ ok: true, slug, dest }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
         });
       } catch (err) {
@@ -1461,6 +1511,7 @@ export default {
     if (url.pathname === '/api/auth/me' && isGetOrHead) {
       const user = await getAuthedUser(request, env);
       if (!user) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
+      await ensureUserHandle(env, user);
       return new Response(JSON.stringify({ ok: true, user: publicUser(user) }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       });
@@ -3866,6 +3917,7 @@ function publicUser(u) {
     name: u.name,
     email: u.email,
     picture: u.picture,
+    handle: u.handle || '',
     tier: u.tier,
     provider: u.provider || (u.passwordHash ? 'email' : 'email'),
     hasPassword: !!u.passwordHash,
@@ -4092,14 +4144,82 @@ async function verifyJwtToken(token, secret) {
 }
 
 function slugifyArtifact(value) {
-  const slug = String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-  return slug;
+  return slugifySlug(value);
+}
+
+async function ensureUserHandle(env, user) {
+  if (!user) return 'user';
+  const isOwner = isOwnerUser(user.email, env) || isOwnerUser(user.id, env);
+  let handle = suggestedHandle(user, isOwner);
+  if (!env?.BOT_MEMORY) {
+    user.handle = handle;
+    return handle;
+  }
+  if (user.handle && slugifyHandle(user.handle) === user.handle && user.handle.length >= 2) {
+    const taken = await env.BOT_MEMORY.get('handle:' + user.handle);
+    if (taken === user.id) return user.handle;
+    if (!taken) {
+      await env.BOT_MEMORY.put('handle:' + user.handle, user.id || user.handle);
+      return user.handle;
+    }
+  }
+  for (let i = 0; i < 40; i++) {
+    const tryH = i === 0 ? handle : (handle.slice(0, 20) + i);
+    const taken = await env.BOT_MEMORY.get('handle:' + tryH);
+    if (!taken || taken === user.id) {
+      user.handle = tryH;
+      if (!taken) await env.BOT_MEMORY.put('handle:' + tryH, user.id || tryH);
+      await persistUserRecord(env, user);
+      return tryH;
+    }
+  }
+  const fallback = (handle.slice(0, 12) + Date.now().toString(36)).slice(0, 24);
+  user.handle = fallback;
+  await env.BOT_MEMORY.put('handle:' + fallback, user.id || fallback);
+  await persistUserRecord(env, user);
+  return fallback;
+}
+
+async function loadJsonRecord(env, key) {
+  if (!env?.BOT_MEMORY || !key) return null;
+  const raw = await env.BOT_MEMORY.get(key);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
+async function loadPubRecord(env, dest, handle, slug) {
+  if (!slug) return null;
+  if (handle) {
+    const rec = await loadJsonRecord(env, recordKey(dest, handle, slug));
+    if (rec) return rec;
+  }
+  if (dest === 'artifact') {
+    const legacy = await loadJsonRecord(env, 'art:' + slug);
+    if (!legacy) return null;
+    if (handle && legacy.handle && legacy.handle !== handle) return null;
+    return legacy;
+  }
+  return null;
+}
+
+async function upsertIndex(env, key, item, slug, handle) {
+  let index = await readJsonArray(env.BOT_MEMORY, key);
+  index = index.filter((it) => {
+    if (!it || it.slug !== slug) return true;
+    if (handle && it.handle && it.handle !== handle) return true;
+    return false;
+  });
+  index.unshift(item);
+  await writeJson(env.BOT_MEMORY, key, index.slice(0, 200));
+}
+
+async function dropFromIndex(env, key, slug, handle) {
+  const index = await readJsonArray(env.BOT_MEMORY, key);
+  await writeJson(env.BOT_MEMORY, key, index.filter((it) => {
+    if (!it || it.slug !== slug) return true;
+    if (handle && it.handle && it.handle !== handle) return true;
+    return false;
+  }));
 }
 
 async function getCachedKvValue(kv, key) {

@@ -121,9 +121,16 @@ body{display:flex;flex-direction:column}
 .bar-actions{display:flex;gap:8px;align-items:center}
 .btn{background:transparent;border:1px solid rgba(255,255,255,.12);color:#cbd5e1;border-radius:8px;padding:6px 10px;font-size:12px;text-decoration:none;cursor:pointer;font-family:inherit}
 .btn:hover{color:#fff;border-color:rgba(255,255,255,.28)}
+.poster{flex-shrink:0;display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(12,18,30,.92)}
+.by-logo{width:40px;height:40px;border-radius:12px;object-fit:cover;border:1px solid rgba(255,255,255,.14);background:#000;flex-shrink:0}
+.by-meta{min-width:0}
+.by-name{font-size:14px;font-weight:650;color:#fff;letter-spacing:-.02em}
+.by-handle{font-size:12px;color:#7dd3fc;margin-top:2px}
+.by-handle a{color:inherit;text-decoration:none}
+.by-handle a:hover{text-decoration:underline}
 .stage{flex:1;min-height:0;position:relative;background:#080c14}
 .frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
-.doc{max-width:760px;margin:0 auto;padding:48px 24px 80px;line-height:1.7;color:#e2e8f0}
+.doc{max-width:760px;margin:0 auto;padding:36px 24px 80px;line-height:1.7;color:#e2e8f0}
 .doc h1,.doc h2,.doc h3{color:#fff;letter-spacing:-.03em;line-height:1.2}
 .doc h1{font-size:2rem;margin:0 0 16px}
 .doc h2{font-size:1.35rem;margin:28px 0 10px}
@@ -147,9 +154,28 @@ body{display:flex;flex-direction:column}
 .card:hover{border-color:rgba(255,255,255,.18)}
 .card h2{margin:0 0 8px;font-size:1rem;color:#fff}
 .card p{margin:0;font-size:12px;color:#64748b;font-family:ui-monospace,monospace}
+.card-by{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.card-by img{width:22px;height:22px;border-radius:7px;object-fit:cover;border:1px solid rgba(255,255,255,.12)}
+.card-by span{font-size:12px;color:#7dd3fc}
 `;
 
-function wrap(title, inner, extraBar) {
+function bylineHtml(item) {
+  const handle = String((item && item.handle) || '').replace(/^@/, '');
+  if (!handle && !(item && item.authorName)) return '';
+  const name = (item && item.authorName) || handle;
+  const pic = (item && item.authorPicture) || '/avatar.png';
+  const dest = (item && item.dest) === 'guide' ? 'Guides' : 'Artifact';
+  const board = handle ? `/artifact/@${esc(handle)}` : '/artifact';
+  return `<div class="poster">
+  <img class="by-logo" src="${esc(pic)}" alt="" width="40" height="40">
+  <div class="by-meta">
+    <div class="by-name">${esc(name)}</div>
+    <div class="by-handle">by ${handle ? `<a href="${board}">@${esc(handle)}</a>` : 'autor'} · ${dest}</div>
+  </div>
+</div>`;
+}
+
+function wrap(title, inner, extraBar, poster) {
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -167,9 +193,15 @@ function wrap(title, inner, extraBar) {
   <div class="bar-title">${esc(title)}</div>
   <div class="bar-actions">${extraBar || ''}<a class="btn" href="/">Studio</a></div>
 </header>
+${poster || ''}
 ${inner}
 </body>
 </html>`;
+}
+
+function itemHref(it) {
+  if (it.handle && it.slug) return '/artifact/@' + encodeURIComponent(it.handle) + '/' + encodeURIComponent(it.slug);
+  return '/artifact/' + encodeURIComponent(it.slug);
 }
 
 export function renderArtifactPage(item) {
@@ -195,19 +227,27 @@ export function renderArtifactPage(item) {
   } else {
     stage = `<div class="stage"><pre class="code">${esc(raw)}</pre></div>`;
   }
-  return wrap(item.title || 'Artifact', stage, copy);
+  return wrap(item.title || 'Artifact', stage, copy, bylineHtml(item));
 }
 
-export function renderArtifactIndex(items) {
-  const cards = (items || []).map((it) =>
-    `<a class="card" href="/artifact/${encodeURIComponent(it.slug)}"><h2>${esc(it.title)}</h2><p>/artifact/${esc(it.slug)}</p></a>`
-  ).join('');
+export function renderArtifactIndex(items, opts) {
+  const handle = opts && opts.handle;
+  const cards = (items || []).map((it) => {
+    const h = it.handle || handle || '';
+    const pic = it.authorPicture || '/avatar.png';
+    const by = h
+      ? `<div class="card-by"><img src="${esc(pic)}" alt=""><span>@${esc(h)}</span></div>`
+      : '';
+    return `<a class="card" href="${itemHref({ ...it, handle: h })}">${by}<h2>${esc(it.title || it.slug)}</h2><p>${h ? '/artifact/@' + esc(h) + '/' + esc(it.slug) : '/artifact/' + esc(it.slug)}</p></a>`;
+  }).join('');
+  const heading = handle ? '@' + handle : 'Artifacts';
   const inner = cards
     ? `<div class="grid">${cards}</div>`
-    : `<div class="empty"><h1>Artifacts</h1><p>Publica un artefacto desde el studio. Quedará en una URL limpia: ${ORIGIN}/artifact/slug</p></div>`;
-  return wrap('Artifacts', inner, '');
+    : `<div class="empty"><h1>${esc(heading)}</h1><p>${handle ? 'Este autor aún no ha publicado artifacts.' : 'Cada cuenta tiene su propio tablero. Publica desde el studio con una cuenta registrada: ' + ORIGIN + '/artifact/@usuario/slug'}</p></div>`;
+  const poster = handle ? bylineHtml({ handle, authorName: (opts && opts.authorName) || handle, authorPicture: (opts && opts.authorPicture) || '/avatar.png', dest: 'artifact' }) : '';
+  return wrap(heading, inner, '', poster);
 }
 
 export function renderArtifactMissing() {
-  return wrap('No encontrado', `<div class="empty"><h1>Este artifact no existe</h1><p>Se despublicó o el enlace es incorrecto.</p><p><a class="btn" href="/artifact">Ver publicados</a></p></div>`, '');
+  return wrap('No encontrado', `<div class="empty"><h1>Este artifact no existe</h1><p>Se despublicó, es de otra cuenta o el enlace es incorrecto.</p><p><a class="btn" href="/artifact">Ver publicados</a></p></div>`, '');
 }

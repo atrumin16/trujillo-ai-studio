@@ -1,6 +1,6 @@
 import { ORIGIN, BRAND, jsonLdFor, hreflangLinks } from './seo.js'
 
-const ASSET_V = '47'
+const ASSET_V = '48'
 
 function esc(s) {
   return String(s || '')
