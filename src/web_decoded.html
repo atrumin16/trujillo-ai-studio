@@ -637,8 +637,9 @@
     @media (max-width: 860px) {
       .art-panel.open { position: fixed; inset: 0; width: 100%; z-index: 60; border-left: 0; }
     }
-    .art-head { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .art-head { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
     .art-title { font-size: 0.84rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .art-format { background: var(--elev); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 0.72rem; padding: 5px 8px; font-family: inherit; }
     .art-preview { flex: 1; width: 100%; border: 0; background: #fff; min-height: 0; }
     .art-preview[hidden], .art-body[hidden] { display: none !important; }
     .art-body { flex: 1; overflow: auto; padding: 14px; font-family: var(--mono); font-size: 0.8rem; line-height: 1.55; white-space: pre-wrap; }
@@ -826,7 +827,8 @@
   <aside class="art-panel" id="art-panel" aria-label="Artefacto">
     <div class="art-head">
       <div class="art-title" id="art-title">Artefacto</div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <select id="art-format" class="art-format" title="Formato" aria-label="Formato del artifact"></select>
         <button type="button" class="topbar-action-btn" id="art-copy-btn">Copiar</button>
         <button type="button" class="topbar-action-btn" id="art-save-btn">Guardar</button>
         <button type="button" class="topbar-action-btn" id="art-publish-btn">Publicar</button>
@@ -2133,12 +2135,37 @@
     var first = (body.split('\n').find(function(l) { return l.trim(); }) || '').replace(/^[#/*\s-]+/, '').slice(0, 48);
     return first || ((lang || 'documento') + ' · Trujillo');
   }
+  var ART_FORMATS = [
+    { id: 'html', label: 'HTML' },
+    { id: 'markdown', label: 'Markdown' },
+    { id: 'plaintext', label: 'Texto' },
+    { id: 'code', label: 'Código' },
+    { id: 'javascript', label: 'JavaScript' },
+    { id: 'python', label: 'Python' },
+    { id: 'json', label: 'JSON' },
+    { id: 'csv', label: 'CSV / tabla' },
+    { id: 'svg', label: 'SVG' },
+    { id: 'mermaid', label: 'Mermaid' }
+  ];
   function artifactKind(art) {
     var l = String((art && art.lang) || '').toLowerCase();
+    var map = { html:'html', htm:'html', react:'html', jsx:'html', markdown:'markdown', md:'markdown', plaintext:'plaintext', text:'plaintext', txt:'plaintext', code:'code', javascript:'javascript', js:'javascript', python:'python', py:'python', json:'json', csv:'csv', svg:'svg', mermaid:'mermaid' };
+    if (map[l]) return map[l];
     var c = String((art && art.content) || '').trim();
-    if (l === 'svg' || /^<svg[\s>]/i.test(c)) return 'svg';
-    if (l === 'html' || l === 'htm' || /^<!doctype html/i.test(c) || /^<html[\s>]/i.test(c) || /^<(div|section|main|article|style)[\s>]/i.test(c)) return 'html';
-    return l === 'markdown' || l === 'md' ? 'markdown' : 'code';
+    if (/^<svg[\s>]/i.test(c)) return 'svg';
+    if (/^<!doctype html/i.test(c) || /^<html[\s>]/i.test(c)) return 'html';
+    if (/^(graph|flowchart|sequenceDiagram)\b/m.test(c)) return 'mermaid';
+    return 'markdown';
+  }
+  function fillArtFormatSelect() {
+    var sel = document.getElementById('art-format');
+    if (!sel || sel.options.length) return;
+    ART_FORMATS.forEach(function(f) {
+      var o = document.createElement('option');
+      o.value = f.id;
+      o.textContent = f.label;
+      sel.appendChild(o);
+    });
   }
   function syncArtifactActions() {
     var openBtn = document.getElementById('art-open-btn');
@@ -2156,11 +2183,21 @@
     var body = document.getElementById('art-body');
     var preview = document.getElementById('art-preview');
     if (title) title.textContent = art.title || 'Artifact';
+    fillArtFormatSelect();
     var kind = artifactKind(art);
-    if (preview && (kind === 'html' || kind === 'svg')) {
+    art.lang = kind;
+    var sel = document.getElementById('art-format');
+    if (sel) sel.value = kind;
+    var live = kind === 'html' || kind === 'svg' || kind === 'mermaid';
+    if (preview && live) {
       preview.hidden = false;
       if (body) body.hidden = true;
-      preview.srcdoc = art.content || '';
+      if (kind === 'mermaid') {
+        preview.srcdoc = '<!DOCTYPE html><html><head><meta charset="UTF-8"><script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"><\/script></head><body style="background:#080c14;margin:16px"><pre class="mermaid">' +
+          String(art.content || '').replace(/</g, '&lt;') + '</pre><script>mermaid.initialize({startOnLoad:true,theme:"dark"});<\/script></body></html>';
+      } else {
+        preview.srcdoc = art.content || '';
+      }
     } else {
       if (preview) { preview.hidden = true; preview.srcdoc = ''; }
       if (body) { body.hidden = false; body.textContent = art.content || ''; }
@@ -2204,7 +2241,7 @@
           title: currentArtifact.title,
           slug: slug,
           content: currentArtifact.content,
-          lang: currentArtifact.lang || 'markdown'
+          lang: (document.getElementById('art-format') && document.getElementById('art-format').value) || currentArtifact.lang || 'markdown'
         })
       });
       var data = await res.json().catch(function() { return {}; });
@@ -2715,7 +2752,7 @@
       item.appendChild(top);
       var slugEl = document.createElement('div');
       slugEl.className = 'art-row-slug';
-      slugEl.textContent = '/artifact/' + a.slug;
+      slugEl.textContent = (a.lang || 'md') + ' · /artifact/' + a.slug;
       item.appendChild(slugEl);
       var actions = document.createElement('div');
       actions.className = 'art-row-actions';
@@ -3820,6 +3857,15 @@
       addDocument({ title: currentArtifact.title, content: currentArtifact.content, type: 'artifact', lang: currentArtifact.lang });
       renderSidebar();
     });
+    fillArtFormatSelect();
+    var artFormat = document.getElementById('art-format');
+    if (artFormat) {
+      artFormat.addEventListener('change', function() {
+        if (!currentArtifact) return;
+        currentArtifact.lang = artFormat.value;
+        openArtifact(currentArtifact);
+      });
+    }
     var artPublishBtn = document.getElementById('art-publish-btn');
     if (artPublishBtn) artPublishBtn.addEventListener('click', publishArtifact);
     var artUnpublishBtn = document.getElementById('art-unpublish-btn');

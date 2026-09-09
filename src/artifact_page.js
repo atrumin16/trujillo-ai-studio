@@ -15,13 +15,54 @@ function srcdocEsc(s) {
     .replace(/<\/iframe/gi, '&lt;/iframe');
 }
 
+const KIND_ALIASES = {
+  html: 'html', htm: 'html', react: 'html', jsx: 'html',
+  markdown: 'markdown', md: 'markdown',
+  plaintext: 'plaintext', text: 'plaintext', txt: 'plaintext',
+  code: 'code',
+  javascript: 'javascript', js: 'javascript', ts: 'javascript', typescript: 'javascript',
+  python: 'python', py: 'python',
+  json: 'json',
+  csv: 'csv', tsv: 'csv',
+  svg: 'svg',
+  mermaid: 'mermaid', mmd: 'mermaid'
+};
+
 export function detectKind(lang, content) {
-  const l = String(lang || '').toLowerCase();
+  const l = String(lang || '').toLowerCase().trim();
+  if (KIND_ALIASES[l]) return KIND_ALIASES[l];
   const c = String(content || '').trim();
-  if (l === 'svg' || /^<svg[\s>]/i.test(c)) return 'svg';
-  if (l === 'html' || l === 'htm' || /^<!doctype html/i.test(c) || /^<html[\s>]/i.test(c) || /^<(div|section|main|article|style)[\s>]/i.test(c)) return 'html';
-  if (l === 'markdown' || l === 'md' || l === 'text' || /^#\s+/m.test(c)) return 'markdown';
+  if (/^<svg[\s>]/i.test(c)) return 'svg';
+  if (/^<!doctype html/i.test(c) || /^<html[\s>]/i.test(c)) return 'html';
+  if (/^(graph|flowchart|sequenceDiagram|classDiagram|erDiagram|pie |gantt|mindmap)\b/m.test(c)) return 'mermaid';
+  if (/^[\[{]/.test(c)) {
+    try { JSON.parse(c); return 'json'; } catch (e) {}
+  }
+  if (/^#\s+/m.test(c) && c.length > 40) return 'markdown';
   return 'code';
+}
+
+function prettyJson(text) {
+  try { return JSON.stringify(JSON.parse(text), null, 2); } catch (e) { return text; }
+}
+
+function csvTable(text) {
+  const rows = String(text || '').trim().split(/\r?\n/).filter(Boolean);
+  if (!rows.length) return '<p>CSV vacío</p>';
+  const parseRow = (line) => line.split(',').map((cell) => esc(cell.trim()));
+  const head = parseRow(rows[0]);
+  const body = rows.slice(1).map(parseRow);
+  let html = '<table class="tbl"><thead><tr>' + head.map((c) => '<th>' + c + '</th>').join('') + '</tr></thead><tbody>';
+  body.forEach((r) => { html += '<tr>' + r.map((c) => '<td>' + c + '</td>').join('') + '</tr>'; });
+  html += '</tbody></table>';
+  return html;
+}
+
+function mermaidDoc(src) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:0;background:#080c14;display:flex;justify-content:center;padding:24px}</style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"><\/script></head>
+<body><pre class="mermaid">${esc(src)}</pre>
+<script>mermaid.initialize({startOnLoad:true,theme:'dark',securityLevel:'strict'});<\/script></body></html>`;
 }
 
 function inlineMd(text) {
@@ -92,6 +133,10 @@ body{display:flex;flex-direction:column}
 .doc code{font-family:ui-monospace,Cascadia Code,monospace;font-size:.86em;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px}
 .doc pre{background:#0c1220;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;overflow:auto}
 .doc pre code{background:none;padding:0}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th,.tbl td{border:1px solid rgba(255,255,255,.1);padding:8px 10px;text-align:left}
+.tbl th{background:rgba(255,255,255,.04);color:#fff}
+.kind{font-size:11px;color:#64748b;border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:3px 8px}
 .code{margin:0;height:100%;overflow:auto;padding:24px;font-family:ui-monospace,Cascadia Code,Consolas,monospace;font-size:13px;line-height:1.55;white-space:pre-wrap;color:#e2e8f0}
 .svgwrap{height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
 .svgwrap svg{max-width:100%;max-height:100%}
@@ -129,17 +174,26 @@ ${inner}
 
 export function renderArtifactPage(item) {
   const kind = detectKind(item.lang, item.content);
-  const copy = `<button class="btn" type="button" id="copy">Copiar enlace</button>
+  const copy = `<span class="kind">${esc(kind)}</span><button class="btn" type="button" id="copy">Copiar enlace</button>
 <script>document.getElementById('copy').onclick=function(){navigator.clipboard.writeText(location.href).then(()=>{this.textContent='Copiado';setTimeout(()=>this.textContent='Copiar enlace',1600)})}</script>`;
+  const raw = item.content || '';
   let stage = '';
   if (kind === 'html') {
-    stage = `<div class="stage"><iframe class="frame" sandbox="allow-scripts allow-forms allow-modals" srcdoc="${srcdocEsc(item.content)}"></iframe></div>`;
+    stage = `<div class="stage"><iframe class="frame" sandbox="allow-scripts allow-forms allow-modals" srcdoc="${srcdocEsc(raw)}"></iframe></div>`;
   } else if (kind === 'svg') {
-    stage = `<div class="stage"><div class="svgwrap"><img alt="" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(item.content)}"></div></div>`;
+    stage = `<div class="stage"><div class="svgwrap"><img alt="" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(raw)}"></div></div>`;
+  } else if (kind === 'mermaid') {
+    stage = `<div class="stage"><iframe class="frame" sandbox="allow-scripts allow-same-origin" srcdoc="${srcdocEsc(mermaidDoc(raw))}"></iframe></div>`;
   } else if (kind === 'markdown') {
-    stage = `<div class="stage" style="overflow:auto"><article class="doc">${renderMarkdown(item.content)}</article></div>`;
+    stage = `<div class="stage" style="overflow:auto"><article class="doc">${renderMarkdown(raw)}</article></div>`;
+  } else if (kind === 'csv') {
+    stage = `<div class="stage" style="overflow:auto"><article class="doc">${csvTable(raw)}</article></div>`;
+  } else if (kind === 'json') {
+    stage = `<div class="stage"><pre class="code">${esc(prettyJson(raw))}</pre></div>`;
+  } else if (kind === 'plaintext') {
+    stage = `<div class="stage" style="overflow:auto"><article class="doc"><p style="white-space:pre-wrap">${esc(raw)}</p></article></div>`;
   } else {
-    stage = `<div class="stage"><pre class="code">${esc(item.content)}</pre></div>`;
+    stage = `<div class="stage"><pre class="code">${esc(raw)}</pre></div>`;
   }
   return wrap(item.title || 'Artifact', stage, copy);
 }

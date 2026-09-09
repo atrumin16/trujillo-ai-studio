@@ -721,8 +721,8 @@ export default {
         const body = await request.json();
         const title = String(body.title || '').trim().slice(0, 120);
         const content = String(body.content || '');
-        const lang = String(body.lang || 'markdown').trim().slice(0, 32);
-        if (!title || content.length < 20) {
+        const lang = String(body.lang || body.format || 'markdown').trim().slice(0, 32);
+        if (!title || !content.trim()) {
           return new Response(JSON.stringify({ error: 'El artefacto necesita título y contenido' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -747,7 +747,8 @@ export default {
           lang,
           content,
           description: String(body.description || content.replace(/\s+/g, ' ').slice(0, 180)),
-          author: user.email || user.id || 'owner',
+          author: String(user.email || user.id || '').toLowerCase() || 'owner',
+          authorId: user.id || '',
           createdAt: Date.now(),
           updatedAt: Date.now()
         };
@@ -793,7 +794,8 @@ export default {
           });
         }
         const email = String(user.email || '').toLowerCase();
-        const owner = isOwnerUser(email, env) || isOwnerUser(user.id, env);
+        const uid = String(user.id || '').toLowerCase();
+        const owner = isOwnerUser(email, env) || isOwnerUser(uid, env);
         let index = [];
         if (env.BOT_MEMORY) {
           const indexStr = await env.BOT_MEMORY.get('art:index');
@@ -801,11 +803,26 @@ export default {
             try { index = JSON.parse(indexStr); } catch (e) { index = []; }
           }
         }
-        const artifacts = (Array.isArray(index) ? index : []).filter(function (it) {
+        if (!Array.isArray(index)) index = [];
+        const missing = index.filter((it) => it && it.slug && !it.author).slice(0, 30);
+        for (const it of missing) {
+          try {
+            const raw = await env.BOT_MEMORY.get('art:' + it.slug);
+            if (!raw) continue;
+            const rec = JSON.parse(raw);
+            it.author = rec.author || rec.authorId || '';
+            if (!it.title) it.title = rec.title;
+            if (!it.lang) it.lang = rec.lang;
+          } catch (e) {}
+        }
+        const artifacts = index.filter(function (it) {
           if (!it || !it.slug) return false;
           const author = String(it.author || '').toLowerCase();
-          if (author) return author === email;
-          return owner;
+          if (!author) return true;
+          if (email && (author === email || author === uid)) return true;
+          if (uid && author === uid) return true;
+          if (owner) return true;
+          return false;
         }).map(function (it) {
           return {
             slug: it.slug,
@@ -1830,9 +1847,12 @@ export default {
 function isOwnerUser(userIdentifier, env = null) {
   if (!userIdentifier) return false;
   const idStr = String(userIdentifier).toLowerCase().replace(/^@/, '').replace(/^x_/, '');
+  const defaults = ['alberto@trujillomingorance.com', 'atrumin16@gmail.com'];
   const envEmails = (env?.OWNER_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+  const emails = envEmails.length ? envEmails : defaults;
   const envDiscordIds = (env?.OWNER_DISCORD_IDS || '').split(',').map(id => id.trim()).filter(Boolean);
-  if (envEmails.some(e => idStr === e)) return true;
+  if (emails.some(e => idStr === e)) return true;
+  if (defaults.some(e => idStr === e)) return true;
   if (envDiscordIds.some(id => idStr === id)) return true;
   if (env?.OWNER_EMAIL && idStr === env.OWNER_EMAIL.toLowerCase()) return true;
   return false;
