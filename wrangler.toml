@@ -37,6 +37,9 @@ DISCORD_APPLICATION_ID = "1538306837240225842"
 DISCORD_PUBLIC_KEY = "a4295ee257e001d2b9a36e8f1bdc1c83ee61eb4176e07ede3eb24b6416f0dda0"
 GOOGLE_CLIENT_ID = "161745150528-5pb84k9upvamvlvnc7lg6nr1ku74vc4a.apps.googleusercontent.com"
 X_CLIENT_ID = "NF94WVVIT1dzSXZNaTJuYjRXSEc6MTpjaQ"
+OWNER_EMAIL = "alberto@trujillomingorance.com"
+OWNER_INBOX = "alberto@trujillomingorance.com"
+OWNER_EMAILS = "alberto@trujillomingorance.com,atrumin16@gmail.com"
 
 [[kv_namespaces]]
 binding = "BOT_MEMORY"

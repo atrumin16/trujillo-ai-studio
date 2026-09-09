@@ -5,7 +5,8 @@ import {
   formatRelativeHuman
 } from './time.js';
 
-const OWNER_INBOX = 'admin@example.com'
+const OWNER_INBOX = 'alberto@trujillomingorance.com'
+const OWNER_INBOXES = ['alberto@trujillomingorance.com', 'atrumin16@gmail.com']
 const OPS_TTL = 14 * 24 * 3600
 const IDEA_MAX = 4000
 const IDEA_MIN = 8
@@ -16,7 +17,19 @@ const VISION_MODELS = [
 const FAST_TEXT_MODEL = 'openai/gpt-oss-20b'
 const WHISPER_MODEL = 'whisper-large-v3-turbo'
 
-export { OWNER_INBOX, VISION_MODELS, FAST_TEXT_MODEL, WHISPER_MODEL }
+export { OWNER_INBOX, OWNER_INBOXES, VISION_MODELS, FAST_TEXT_MODEL, WHISPER_MODEL }
+
+export function ownerInbox(env) {
+  const extra = String(env?.OWNER_INBOX || env?.OWNER_EMAIL || env?.OWNER_EMAILS || '')
+    .split(',')
+    .map((e) => String(e || '').trim().toLowerCase())
+    .filter((e) => e.includes('@') && !e.endsWith('@example.com'))
+  const out = []
+  for (const e of [...extra, ...OWNER_INBOXES]) {
+    if (e && !out.includes(e)) out.push(e)
+  }
+  return out.length ? out : OWNER_INBOXES.slice()
+}
 
 export function utcDay(offset = 0) {
   const d = new Date()
@@ -191,7 +204,7 @@ export async function handleIdeaPost({ body, ip, env, sendEmail }) {
 </div>`
 
   const mail = {
-    to: env?.OWNER_INBOX || env?.OWNER_EMAIL || OWNER_INBOX,
+    to: ownerInbox(env),
     subject: `[Trujillo AI] Idea (${catLabel}): ${text.slice(0, 60)}`,
     heading: 'Nueva Idea de Usuario',
     text: `${catLabel}\n${fromLine}\n${relativeTime}\n\n${text}\n\nID: ${item.id}`,
@@ -450,7 +463,7 @@ export async function sendDailyOpsReport(env, sendEmail) {
   const mail = formatOpsReport(data)
   if (typeof sendEmail !== 'function') return { ok: false, error: 'no_mailer' }
   return sendEmail({
-    to: env?.OWNER_INBOX || env?.OWNER_EMAIL || OWNER_INBOX,
+    to: ownerInbox(env),
     subject: mail.subject,
     text: mail.text,
     html: mail.html,

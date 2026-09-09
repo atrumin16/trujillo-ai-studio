@@ -36,6 +36,7 @@ import {
   parseDataImage,
   readOps,
   sendDailyOpsReport,
+  ownerInbox,
   shouldRetryGroq,
   normalizeModel,
   FAST_TEXT_MODEL,
@@ -243,17 +244,8 @@ const corsHeaders = {
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(sendDailyOpsReport(env, (opts) => sendAppEmail(env, {
-      ...opts,
-      html: brandEmailHtml({
-        title: opts.subject,
-        preheader: 'Informe diario de Trujillo AI',
-        bodyHtml: opts.html,
-        ctaLabel: 'Abrir workspace',
-        ctaUrl: APP_ORIGIN,
-        locale: 'es'
-      })
-    })));
+    const result = await runDailyOpsReport(env, { source: 'cron', cron: event && event.cron });
+    console.log('daily-ops', result && result.ok ? 'ok' : (result && result.error) || 'failed');
   },
 
   async fetch(request, env, ctx) {
@@ -1682,22 +1674,27 @@ export default {
       }
     }
 
+    if (url.pathname === '/api/ops/report' && isGetOrHead) {
+      const user = await getAuthedUser(request, env);
+      if (!isOwnerUser(user?.email, env)) {
+        return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders });
+      }
+      let last = null;
+      try {
+        const raw = env.BOT_MEMORY ? await env.BOT_MEMORY.get('ops_mail_last') : null;
+        if (raw) last = JSON.parse(raw);
+      } catch (e) {}
+      return new Response(JSON.stringify({ ok: true, last, inbox: ownerInbox(env) }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+      });
+    }
+
     if (url.pathname === '/api/ops/report' && request.method === 'POST') {
       const user = await getAuthedUser(request, env);
       if (!isOwnerUser(user?.email, env)) {
         return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders });
       }
-      const sent = await sendDailyOpsReport(env, (opts) => sendAppEmail(env, {
-        ...opts,
-        html: brandEmailHtml({
-          title: opts.subject,
-          preheader: 'Informe diario de Trujillo AI',
-          bodyHtml: opts.html,
-          ctaLabel: 'Abrir workspace',
-          ctaUrl: APP_ORIGIN,
-          locale: 'es'
-        })
-      }));
+      const sent = await runDailyOpsReport(env, { source: 'manual' });
       return new Response(JSON.stringify(sent), {
         status: sent.ok ? 200 : 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -3903,9 +3900,57 @@ ${cta}
 </body></html>`;
 }
 
+function normalizeEmailList(to) {
+  const raw = Array.isArray(to) ? to : String(to || '').split(',');
+  const out = [];
+  for (const item of raw) {
+    const e = String(item || '').trim().toLowerCase();
+    if (!e.includes('@') || e.endsWith('@example.com')) continue;
+    if (!out.includes(e)) out.push(e);
+  }
+  return out;
+}
+
+async function runDailyOpsReport(env, meta = {}) {
+  const started = Date.now();
+  let result = { ok: false, error: 'not_run' };
+  try {
+    result = await sendDailyOpsReport(env, (opts) => sendAppEmail(env, {
+      ...opts,
+      html: brandEmailHtml({
+        title: opts.subject,
+        preheader: 'Informe diario de Trujillo AI',
+        bodyHtml: opts.html,
+        ctaLabel: 'Abrir workspace',
+        ctaUrl: APP_ORIGIN,
+        locale: 'es'
+      })
+    }));
+  } catch (e) {
+    result = { ok: false, error: e?.message || String(e) };
+  }
+  const record = {
+    at: Date.now(),
+    ms: Date.now() - started,
+    ok: !!result?.ok,
+    error: result?.error || '',
+    to: result?.to || ownerInbox(env),
+    source: meta.source || 'cron',
+    cron: meta.cron || ''
+  };
+  try {
+    if (env?.BOT_MEMORY) {
+      await env.BOT_MEMORY.put('ops_mail_last', JSON.stringify(record));
+    }
+  } catch (e) {}
+  return { ...result, ...record };
+}
+
 async function sendAppEmail(env, opts) {
-  const to = (opts.to || '').trim();
-  if (!to || !to.includes('@')) return { ok: false, error: 'Destinatario inválido' };
+  const recipients = normalizeEmailList(opts.to).length
+    ? normalizeEmailList(opts.to)
+    : ownerInbox(env);
+  if (!recipients.length) return { ok: false, error: 'Destinatario inválido' };
 
   const resendApiKey = env.RESEND_API_KEY;
   if (!resendApiKey) {
@@ -3918,7 +3963,7 @@ async function sendAppEmail(env, opts) {
   ];
 
   const payloadBase = {
-    to: [to],
+    to: recipients,
     subject: opts.subject,
     text: opts.text,
     html: opts.html,
@@ -3943,7 +3988,7 @@ async function sendAppEmail(env, opts) {
       });
 
       const data = await resendRes.json().catch(() => ({}));
-      if (resendRes.ok) return { ok: true, id: data?.id, sender: fromDisplay };
+      if (resendRes.ok) return { ok: true, id: data?.id, sender: fromDisplay, to: recipients };
 
       lastError = data?.message || `HTTP ${resendRes.status}`;
       if (!lastError.toLowerCase().includes('domain') && !lastError.toLowerCase().includes('verify')) {
