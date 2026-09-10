@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Paperclip, Send, Square, PanelLeft, Plus, Search, Copy, Trash2, Pencil, RefreshCw, ThumbsUp, ThumbsDown, Archive, Pin, Image, Link2 } from 'lucide-react'
+import { Paperclip, Send, Square, PanelLeft, Plus, Search, Copy, Trash2, Pencil, RefreshCw, ThumbsUp, ThumbsDown, Archive, Pin, Image, Link2, Eye } from 'lucide-react'
 import { t } from './lib/i18n'
 import { applyChrome, detectLang, loadPrefs, savePrefs, type Prefs, type SettingsTab } from './lib/prefs'
 import {
@@ -23,6 +23,7 @@ import { Input } from './components/ui/input'
 import { ScrollArea } from './components/ui/scroll-area'
 import { SettingsDialog } from './components/SettingsDialog'
 import { AccountMenu } from './components/AccountMenu'
+import { ArtifactList } from './components/ArtifactList'
 
 export default function App() {
   const [prefs, setPrefs] = useState<Prefs>(() => loadPrefs())
@@ -39,6 +40,7 @@ export default function App() {
   const [showArchived, setShowArchived] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteQ, setPaletteQ] = useState('')
+  const [showArtifacts, setShowArtifacts] = useState(false)
   const paletteRef = useRef<HTMLInputElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const scroller = useRef<HTMLDivElement | null>(null)
@@ -397,7 +399,8 @@ export default function App() {
         <div className="flex items-center gap-2 px-3 py-3">
           <img src="/mark.svg" alt="" className="h-7 w-7 rounded-lg" />
           <div className="text-sm font-semibold tracking-tight">{L('app')}</div>
-        </div>
+          </div>
+        )}
         <div className="px-3 pb-2">
           <Button className="w-full justify-start" onClick={startChat}>
             <Plus className="h-4 w-4" /> {L('newChat')}
@@ -545,8 +548,8 @@ export default function App() {
                 {L('tempOn')}
               </span>
             )}
-            <Button variant="ghost" size="sm" onClick={() => { setPaletteQ(''); setPaletteOpen(true); window.setTimeout(() => paletteRef.current?.focus(), 0) }}>
-              {L('commandPalette')}
+            <Button variant="ghost" size="sm" onClick={() => setShowArtifacts(!showArtifacts)}>
+              {showArtifacts ? 'Volver al Chat' : 'Ver página pública'}
             </Button>
             <AccountMenu
               variant="header"
@@ -559,7 +562,27 @@ export default function App() {
           </div>
         </header>
 
-        <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
+        {showArtifacts ? (
+          <div className="flex-1 overflow-y-auto p-4 md:p-8">
+            <div className="mx-auto w-full max-w-4xl space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-white">Artifacts & Guías</h2>
+                <Button size="sm" className="bg-cyan-600 hover:bg-cyan-500">
+                  <Plus className="mr-2 h-4 w-4" /> Nuevo artifact
+                </Button>
+              </div>
+              <ArtifactList 
+                items={[
+                  { id: '1', title: 'Arquitectura de Correo Empresarial a Coste 0 €', type: 'GUIDES', handle: 'enterprise-email' },
+                  { id: '2', title: 'Telemetría Host y Detección de Intrusión (Open-Sentinel)', type: 'GUIDES', handle: 'open-sentinel' },
+                  { id: '3', title: 'Inferencia multimodal sub-100ms en Groq LPU y Cloudflare', type: 'GUIDES', handle: 'edge-ai' },
+                  { id: '4', title: 'Documentación Técnica API v2', type: 'LIBRARY', handle: 'api-docs-v2' },
+                ]} 
+              />
+            </div>
+          </div>
+        ) : (
+          <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
           <div className={`mx-auto flex min-h-full w-full ${col} flex-col px-2 py-4 md:px-4 md:py-8`}>
             {!active?.messages.length ? (
               <div className="m-auto text-center">
@@ -661,9 +684,10 @@ export default function App() {
               </div>
             )}
           </div>
-        </div>
+        )}
 
-        <div className="px-2 pb-2 md:px-4 md:pb-5">
+        {!showArtifacts && (
+          <div className="px-2 pb-2 md:px-4 md:pb-5">
           <div className={`mx-auto w-full ${col} rounded-xl md:rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2 shadow-lg`}>
             <textarea
               ref={composerRef}
