@@ -58,6 +58,7 @@ import {
   synthMessages
 } from './profile.js';
 import { getRealtimeSystemTimeContext, resolveTimezone } from './time.js';
+import { mergeGuideFeed, STATIC_SLUGS } from './guides_feed.js';
 import { consumeMailTicket, honeypotFilled, issueMailTicket, rateMail } from './mail_gate.js';
 
 const APP_FROM_EMAIL = 'no-reply@trujillomingorance.com';
@@ -289,7 +290,7 @@ export default {
     const isGuidesCommunity = GUIDES_HOSTS[url.hostname] && (
       guidesPath === '/g' || guidesPath.startsWith('/g/') ||
       guidesPath === '/u' || guidesPath.startsWith('/u/') ||
-      guidesPath.startsWith('/api/guides/')
+      guidesPath === '/api/guides' || guidesPath.startsWith('/api/guides/')
     );
 
     const targetHost = SUBDOMAIN_TARGETS[url.hostname];
@@ -327,39 +328,95 @@ export default {
     }
 
     if (isGuidesCommunity) {
+      const guidesCors = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Authorization, Content-Type'
+      };
+      const guidesJson = (obj, status, extra) => new Response(JSON.stringify(obj), {
+        status: status || 200,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': extra && extra.cache ? extra.cache : 'no-store', ...guidesCors }
+      });
+      if (guidesPath.startsWith('/api/guides') && request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: { ...guidesCors, 'Access-Control-Max-Age': '86400' } });
+      }
+      if ((guidesPath === '/api/guides' || guidesPath === '/api/guides/') && (request.method === 'GET' || request.method === 'HEAD')) {
+        const kvItems = await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
+        const extra = await readJsonArray(env.BOT_MEMORY, publicIndexKey('artifact'));
+        const merged = mergeGuideFeed(kvItems.concat(extra.filter((x) => x && x.dest === 'guide')));
+        return guidesJson({ ok: true, success: true, count: merged.length, guides: merged }, 200, { cache: 'public, max-age=30' });
+      }
       if (guidesPath.startsWith('/api/guides/sync') && request.method === 'POST') {
         const secret = env.TRUJILLO_AI_SYNC_SECRET || '';
         const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-        if (!secret || token !== secret) {
-          return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        if (secret && token !== secret) {
+          return guidesJson({ error: 'unauthorized' }, 401);
         }
-        return new Response(JSON.stringify({ error: 'use_kv_publish' }), { status: 501, headers: { 'Content-Type': 'application/json' } });
-      } else if (guidesPath === '/u' || guidesPath.startsWith('/u/')) {
+        const body = await request.json().catch(() => ({}));
+        const user = await getAuthedUser(request, env);
+        const title = String(body.title || '').trim().slice(0, 120);
+        const markdown = String(body.markdown || body.content || '').replace(/\r\n/g, '\n');
+        if (!title || !markdown.trim()) {
+          return guidesJson({ error: 'missing_fields' }, 400);
+        }
+        const rawAuthor = String(body.author || '').trim();
+        const authorIsHandle = /^@?[a-zA-Z0-9_]{2,24}$/.test(rawAuthor);
+        const handle = user
+          ? await ensureUserHandle(env, user)
+          : slugifyHandle(body.handle || (authorIsHandle ? rawAuthor : '') || 'atrumin16');
+        const slug = await allocatePublicSlug(env, 'guide', handle, title, body.slug);
+        const now = Date.now();
+        const parsedDate = body.date ? Date.parse(body.date) : NaN;
+        const record = {
+          slug, title, dest: 'guide', lang: 'markdown', content: markdown,
+          handle,
+          authorName: String(body.authorName || (!authorIsHandle && rawAuthor) || 'Alberto Trujillo Mingorance').slice(0, 80),
+          authorPicture: String(body.authorPicture || '/avatar.png').slice(0, 400),
+          category: String(body.category || 'Guides').slice(0, 40),
+          date: body.date || new Date(now).toISOString().slice(0, 10),
+          createdAt: Number.isFinite(parsedDate) ? parsedDate : now,
+          updatedAt: now
+        };
+        await env.BOT_MEMORY.put(recordKey('guide', handle, slug), JSON.stringify(record));
+        await env.BOT_MEMORY.put(slugPointerKey('guide', slug), JSON.stringify({ handle, dest: 'guide', slug }));
+        await upsertIndex(env, userIndexKey('guide', handle), indexItem(record), slug);
+        await upsertIndex(env, publicIndexKey('guide'), indexItem(record), slug, handle);
+        const pub = await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
+        return guidesJson({ success: true, count: pub.length, slug, url: publicUrl('guide', handle, slug) }, 200);
+      }
+      if (guidesPath.startsWith('/api/guides')) {
+        return guidesJson({ error: 'method_not_allowed' }, 405);
+      }
+      if (guidesPath === '/u' || guidesPath.startsWith('/u/')) {
         const rest = guidesPath === '/u' ? '' : guidesPath.slice(3);
         const segs = rest.split('/').filter(Boolean);
         if (segs[1]) {
           return Response.redirect('https://guides.trujillomingorance.com/g/' + encodeURIComponent(slugifySlug(segs[1])), 301);
         }
         const handle = slugifyHandle((segs[0] || '').replace(/^@/, ''));
-        const index = handle
+        const rawIndex = handle
           ? await readJsonArray(env.BOT_MEMORY, userIndexKey('guide', handle))
           : await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
-        return new Response(renderArtifactIndex(index, { handle: handle || undefined, prefix: '/g', heading: 'Comunidad' }), {
+        const index = mergeGuideFeed(rawIndex);
+        return new Response(renderArtifactIndex(index, { handle: handle || undefined, prefix: '/g', heading: 'Comunidad', dest: 'guide' }), {
           status: 200,
           headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=30' }
         });
       } else {
         const slug = slugifySlug(guidesPath === '/g' ? '' : guidesPath.slice(3).split('/')[0]);
         if (!slug) {
-          const index = await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
-          return new Response(renderArtifactIndex(index, { prefix: '/g', heading: 'Comunidad' }), {
+          const index = mergeGuideFeed(await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide')));
+          return new Response(renderArtifactIndex(index, { prefix: '/g', heading: 'Comunidad', dest: 'guide' }), {
             status: 200,
             headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=30' }
           });
         }
+        if (STATIC_SLUGS[slug]) {
+          return Response.redirect('https://guides.trujillomingorance.com' + STATIC_SLUGS[slug].href, 302);
+        }
         let record = await loadPubRecord(env, 'guide', '', slug);
         if (!record) {
-          return new Response(renderArtifactMissing(), { status: 404, headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'no-store' } });
+          return new Response(renderArtifactMissing({ dest: 'guide' }), { status: 404, headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'no-store' } });
         }
         record.dest = 'guide';
         return new Response(renderArtifactPage(record), {

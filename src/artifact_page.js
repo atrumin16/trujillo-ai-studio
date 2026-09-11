@@ -108,33 +108,39 @@ export function renderMarkdown(md) {
     }
     const lines = parts[i].split('\n');
     let buf = [];
+    let inTable = false;
     const flush = () => {
       const t = buf.join(' ').trim();
       buf = [];
       if (t) html += '<p>' + inlineMd(t) + '</p>';
+    };
+    const closeTable = () => {
+      if (!inTable) return;
+      html += '</tbody></table></div>';
+      inTable = false;
     };
     for (const line of lines) {
       const tv = line.match(/^<(?:TradingViewWidget|tradingview)\s+symbol=["']([^"']+)["'](?:\s+interval=["']([^"']+)["'])?[^>]*\/?>$/i)
         || line.match(/^:::tradingview\s+(\S+)(?:\s+(\S+))?/);
       if (tv) {
         flush();
+        closeTable();
         html += tvEmbed(tv[1], tv[2]);
         continue;
       }
-      if (/^\|.+\|$/.test(line)) {
+      if (/^\s*\|.+\|\s*$/.test(line)) {
         flush();
         const cells = line.split('|').slice(1, -1).map((c) => c.trim());
         if (/^\s*\|?\s*:?-{3,}/.test(line)) continue;
-        if (!html.endsWith('</th></tr>') && cells.length) {
-          html += '<div class="table-wrap"><table><thead><tr>' + cells.map((c) => '<th>' + inlineMd(c) + '</th>').join('') + '</tr></thead><tbody>';
+        if (!inTable) {
+          html += '<div class="overflow-x-auto my-6 border border-neutral-800 rounded-lg table-wrap"><table class="w-full text-left text-sm border-collapse"><thead><tr>' + cells.map((c) => '<th>' + inlineMd(c) + '</th>').join('') + '</tr></thead><tbody>';
+          inTable = true;
         } else {
           html += '<tr>' + cells.map((c) => '<td>' + inlineMd(c) + '</td>').join('') + '</tr>';
         }
         continue;
       }
-      if (html.includes('<tbody>') && !/^\|.+\|$/.test(line) && html.endsWith('</tr>')) {
-        html += '</tbody></table></div>';
-      }
+      closeTable();
       const h = line.match(/^(#{1,3})\s+(.+)$/);
       if (h) {
         flush();
@@ -151,6 +157,7 @@ export function renderMarkdown(md) {
       buf.push(line.trim());
     }
     flush();
+    closeTable();
   }
   return html.replace(/(?:<li>[\s\S]*?<\/li>)+/g, (b) => '<ul>' + b + '</ul>');
 }
@@ -166,13 +173,14 @@ body{display:flex;flex-direction:column}
 .btn:hover{color:#fff;border-color:rgba(255,255,255,.28)}
 .article-head{flex-shrink:0;max-width:760px;width:100%;margin:0 auto;padding:28px 24px 0;box-sizing:border-box}
 .page-title{margin:0 0 12px;font-size:1.85rem;font-weight:700;line-height:1.2;color:#fff;letter-spacing:-.03em;word-break:break-word}
-.meta-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:16px;margin-bottom:8px;border-bottom:1px solid #262626}
+.meta-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:16px;margin-bottom:24px;border-bottom:1px solid #262626}
 .by-logo{width:28px;height:28px;border-radius:999px;object-fit:cover;background:#262626;flex-shrink:0}
-.meta-line{font-size:13px;color:#a3a3a3;line-height:1.3;min-width:0}
+.meta-line{font-size:13px;color:#a3a3a3;line-height:1.3;min-width:0;margin:0}
 .meta-line strong{color:#e5e5e5;font-weight:600}
 .meta-line a{color:#a3a3a3;text-decoration:none}
 .meta-line a:hover{color:#fff}
-.meta-bar .btn{margin-left:auto}
+.meta-bar .btn,.meta-bar .copy-link{margin-left:auto}
+.guide-badge{display:inline-block;background:rgba(56,189,248,.12);color:#38bdf8;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid rgba(56,189,248,.25)}
 .extras{flex-shrink:0;border-top:1px solid rgba(255,255,255,.08);padding:18px 16px 28px;background:#080c14}
 .extras-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;max-width:1100px;margin:0 auto}
 .extras h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin:0 0 8px}
@@ -234,26 +242,29 @@ function bylineHtml(item) {
   const pic = (item && item.authorPicture) || '/avatar.png';
   const dest = (item && item.dest) === 'guide' ? 'Guides' : 'Library';
   const title = (item && item.title) || '';
-  const when = formatPubDate(item && (item.updatedAt || item.createdAt));
-  const copy = `<button class="btn" type="button" id="copy">Copiar enlace</button>
+  const when = formatPubDate(item && (item.date || item.updatedAt || item.createdAt));
+  const copy = `<button class="btn copy-link" type="button" id="copy">Copiar enlace</button>
 <script>document.getElementById('copy').onclick=function(){navigator.clipboard.writeText(location.href).then(()=>{this.textContent='Copiado';setTimeout(()=>this.textContent='Copiar enlace',1600)})}<\/script>`;
   return `<div class="article-head">
   ${title ? `<h1 class="page-title">${esc(title)}</h1>` : ''}
   <div class="meta-bar">
     <img class="by-logo" src="${esc(pic)}" alt="" width="28" height="28">
-    <div class="meta-line"><strong>${esc(name || 'Autor')}</strong>${handle ? ` · <a href="${LIBRARY_PREFIX}">@${esc(handle)}</a>` : ''} · ${esc(dest)}${when ? ' · ' + esc(when) : ''}</div>
+    <p class="meta-line"><strong>${esc(name || 'Alberto Trujillo Mingorance')}</strong>${handle ? ` · @${esc(handle)}` : ''} · <span class="guide-badge">${esc(dest)}</span>${when ? ' · ' + esc(when) : ''}</p>
     ${copy}
   </div>
 </div>`;
 }
 
-function wrap(title, inner, extraBar, poster) {
+function wrap(title, inner, extraBar, poster, opts) {
+  const isGuide = opts && opts.dest === 'guide';
+  const brand = isGuide ? 'ATM Docs' : 'Trujillo AI';
+  const home = isGuide ? 'https://guides.trujillomingorance.com/' : '/';
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)} · Trujillo AI</title>
+<title>${esc(title)} · ${esc(brand)}</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#080c14">
 <link rel="icon" href="/avatar.png">
@@ -261,8 +272,8 @@ function wrap(title, inner, extraBar, poster) {
 </head>
 <body>
 <header class="bar">
-  <a class="brand" href="/"><img src="/avatar.png" alt="" width="22" height="22">Trujillo AI</a>
-  <div class="bar-actions">${extraBar || ''}<a class="btn" href="/">Studio</a></div>
+  <a class="brand" href="${home}"><img src="/avatar.png" alt="" width="22" height="22">${esc(brand)}</a>
+  <div class="bar-actions">${extraBar || ''}<a class="btn" href="https://ai.trujillomingorance.com">Studio</a></div>
 </header>
 ${poster || ''}
 ${inner}
@@ -271,6 +282,8 @@ ${inner}
 }
 
 function itemHref(it, prefix) {
+  if (it && it.href) return it.href;
+  if (it && it.static) return '/guides/' + it.slug + '/';
   return (prefix || LIBRARY_PREFIX) + '/' + encodeURIComponent(it.slug);
 }
 
@@ -337,7 +350,7 @@ export function renderArtifactPage(item) {
   } else {
     stage = `<div class="stage"><pre class="code">${esc(raw)}</pre></div>`;
   }
-  return wrap(item.title || 'Library', stage + extrasHtml(item), `<span class="kind">${esc(kind)}</span>`, bylineHtml(item));
+  return wrap(item.title || 'Library', stage + extrasHtml(item), `<span class="kind">${esc(kind)}</span>`, bylineHtml(item), { dest: item.dest });
 }
 
 export function renderArtifactIndex(items, opts) {
@@ -355,10 +368,14 @@ export function renderArtifactIndex(items, opts) {
   const inner = cards
     ? `<div class="grid">${cards}</div>`
     : `<div class="empty"><h1>${esc(heading)}</h1><p>${handle ? 'Este autor aún no ha publicado en su library.' : 'Publica desde el studio. La URL es automática: ' + ORIGIN + '/library/slug'}</p></div>`;
-  const poster = handle ? bylineHtml({ handle, authorName: (opts && opts.authorName) || handle, authorPicture: (opts && opts.authorPicture) || '/avatar.png', dest: 'artifact' }) : '';
-  return wrap(heading, inner, '', poster);
+  const dest = (opts && opts.dest) || 'artifact';
+  const poster = handle ? bylineHtml({ handle, authorName: (opts && opts.authorName) || handle, authorPicture: (opts && opts.authorPicture) || '/avatar.png', dest }) : '';
+  return wrap(heading, inner, '', poster, { dest });
 }
 
-export function renderArtifactMissing() {
-  return wrap('No encontrado', `<div class="empty"><h1>Esta pieza no existe</h1><p>Se despublicó, es de otra cuenta o el enlace es incorrecto.</p><p><a class="btn" href="${LIBRARY_PREFIX}">Ver library</a></p></div>`, '');
+export function renderArtifactMissing(opts) {
+  const dest = opts && opts.dest;
+  const home = dest === 'guide' ? 'https://guides.trujillomingorance.com/' : LIBRARY_PREFIX;
+  const label = dest === 'guide' ? 'Ver guías' : 'Ver library';
+  return wrap('No encontrado', `<div class="empty"><h1>Esta pieza no existe</h1><p>Se despublicó, es de otra cuenta o el enlace es incorrecto.</p><p><a class="btn" href="${home}">${label}</a></p></div>`, '', '', { dest });
 }
