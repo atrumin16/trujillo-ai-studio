@@ -347,12 +347,12 @@ export default {
         return guidesJson({ ok: true, success: true, count: merged.length, guides: merged }, 200, { cache: 'public, max-age=30' });
       }
       if (guidesPath.startsWith('/api/guides/sync') && request.method === 'POST') {
-        const secret = env.TRUJILLO_AI_SYNC_SECRET || '';
-        const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-        if (secret && token !== secret) {
-          return guidesJson({ error: 'unauthorized' }, 401);
-        }
-        const body = await request.json().catch(() => ({}));
+        const secret = String(env.TRUJILLO_AI_SYNC_SECRET || '');
+        const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+        if (!secret) return guidesJson({ error: 'sync_secret_unconfigured' }, 503);
+        if (!token || token !== secret) return guidesJson({ error: 'unauthorized' }, 401);
+        const body = await request.json().catch(() => null);
+        if (!body || typeof body !== 'object') return guidesJson({ error: 'invalid_json' }, 400);
         const user = await getAuthedUser(request, env);
         const title = String(body.title || '').trim().slice(0, 120);
         const markdown = String(body.markdown || body.content || '').replace(/\r\n/g, '\n');
@@ -365,16 +365,31 @@ export default {
           ? await ensureUserHandle(env, user)
           : slugifyHandle(body.handle || (authorIsHandle ? rawAuthor : '') || 'atrumin16');
         const slug = await allocatePublicSlug(env, 'guide', handle, title, body.slug);
+        const existing = await loadJsonRecord(env, recordKey('guide', handle, slug));
+        const prev = (existing && existing.extras) || {};
+        const attachIn = Array.isArray(body.attachments) ? body.attachments.slice(0, 20) : [];
+        const attachments = (attachIn.length ? attachIn : (prev.attachments || [])).filter((a) => {
+          if (!a || !a.url) return false;
+          const ext = String(a.ext || (String(a.name || '').split('.').pop() || '')).toLowerCase();
+          if (!/^(pdf|docx|doc|xlsx|xls|csv|zip)$/.test(ext)) return false;
+          return String(a.url).startsWith('https://') || String(a.url).startsWith('/');
+        });
         const now = Date.now();
         const parsedDate = body.date ? Date.parse(body.date) : NaN;
         const record = {
           slug, title, dest: 'guide', lang: 'markdown', content: markdown,
           handle,
-          authorName: String(body.authorName || (!authorIsHandle && rawAuthor) || 'Alberto Trujillo Mingorance').slice(0, 80),
-          authorPicture: String(body.authorPicture || '/avatar.png').slice(0, 400),
-          category: String(body.category || 'Guides').slice(0, 40),
-          date: body.date || new Date(now).toISOString().slice(0, 10),
-          createdAt: Number.isFinite(parsedDate) ? parsedDate : now,
+          authorName: String(body.authorName || (existing && existing.authorName) || (!authorIsHandle && rawAuthor) || 'Alberto Trujillo Mingorance').slice(0, 80),
+          authorPicture: String(body.authorPicture || (existing && existing.authorPicture) || '/avatar.png').slice(0, 400),
+          category: String(body.category || (existing && existing.category) || 'Guides').slice(0, 40),
+          date: body.date || (existing && existing.date) || new Date(now).toISOString().slice(0, 10),
+          extras: {
+            attachments,
+            widgets: Array.isArray(body.widgets) && body.widgets.length ? body.widgets.slice(0, 20) : (prev.widgets || []),
+            sources: Array.isArray(body.sources) && body.sources.length ? body.sources.slice(0, 20) : (prev.sources || []),
+            resources: Array.isArray(body.resources) && body.resources.length ? body.resources.slice(0, 20) : (prev.resources || [])
+          },
+          createdAt: (existing && existing.createdAt) || (Number.isFinite(parsedDate) ? parsedDate : now),
           updatedAt: now
         };
         await env.BOT_MEMORY.put(recordKey('guide', handle, slug), JSON.stringify(record));

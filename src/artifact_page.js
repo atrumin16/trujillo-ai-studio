@@ -292,7 +292,8 @@ function extrasHtml(item) {
   const sources = Array.isArray(extra.sources) ? extra.sources : [];
   const resources = Array.isArray(extra.resources) ? extra.resources : [];
   const widgets = Array.isArray(extra.widgets) ? extra.widgets : [];
-  if (!sources.length && !resources.length && !widgets.length) return '';
+  const attachments = Array.isArray(extra.attachments) ? extra.attachments : [];
+  if (!sources.length && !resources.length && !widgets.length && !attachments.length) return '';
   let html = '<aside class="extras"><div class="extras-grid">';
   if (sources.length) {
     html += '<div><h2>Fuentes</h2>' + sources.map((s) =>
@@ -305,6 +306,12 @@ function extrasHtml(item) {
       return s.url
         ? `<p><a href="${esc(s.url)}" rel="noopener" target="_blank">${esc(s.title || s.url)}</a>${note}</p>`
         : `<p>${esc(s.title || '')}${note}</p>`;
+    }).join('') + '</div>';
+  }
+  if (attachments.length) {
+    html += '<div><h2>Adjuntos</h2>' + attachments.map((a) => {
+      if (!a || !a.url) return '';
+      return `<a class="btn" href="${esc(a.url)}" rel="noopener" download>${esc(a.name || a.url)}</a>`;
     }).join('') + '</div>';
   }
   if (widgets.length) {
@@ -350,7 +357,19 @@ export function renderArtifactPage(item) {
   } else {
     stage = `<div class="stage"><pre class="code">${esc(raw)}</pre></div>`;
   }
-  return wrap(item.title || 'Library', stage + extrasHtml(item), `<span class="kind">${esc(kind)}</span>`, bylineHtml(item), { dest: item.dest });
+  const extra = (item && item.extras) || {};
+  const payload = JSON.stringify({
+    attachments: extra.attachments || [],
+    widgets: extra.widgets || [],
+    date: item.date || ''
+  }).replace(/</g, '\\u003c');
+  return wrap(
+    item.title || 'Library',
+    stage + extrasHtml(item) + `<script type="application/json" id="guide-payload">${payload}</script><aside id="guide-attachments" hidden></aside>`,
+    `<span class="kind">${esc(kind)}</span>`,
+    bylineHtml(item),
+    { dest: item.dest }
+  );
 }
 
 export function renderArtifactIndex(items, opts) {
