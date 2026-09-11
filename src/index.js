@@ -281,8 +281,19 @@ export default {
       'www.trujillomingorance.com': 'domain-root-2r5.pages.dev'
     };
 
+    const GUIDES_HOSTS = {
+      'guides.trujillomingorance.com': 1,
+      'guias.trujillomingorance.com': 1
+    };
+    const guidesPath = (url.pathname.replace(/\/+$/, '') || '/');
+    const isGuidesCommunity = GUIDES_HOSTS[url.hostname] && (
+      guidesPath === '/g' || guidesPath.startsWith('/g/') ||
+      guidesPath === '/u' || guidesPath.startsWith('/u/') ||
+      guidesPath.startsWith('/api/guides/')
+    );
+
     const targetHost = SUBDOMAIN_TARGETS[url.hostname];
-    if (targetHost) {
+    if (targetHost && !isGuidesCommunity) {
       const targetUrl = new URL(request.url);
       targetUrl.hostname = targetHost;
       targetUrl.protocol = 'https:';
@@ -313,6 +324,49 @@ export default {
         statusText: proxyRes.statusText,
         headers: resHeaders
       });
+    }
+
+    if (isGuidesCommunity) {
+      if (guidesPath.startsWith('/api/guides/sync') && request.method === 'POST') {
+        const secret = env.TRUJILLO_AI_SYNC_SECRET || '';
+        const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+        if (!secret || token !== secret) {
+          return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({ error: 'use_kv_publish' }), { status: 501, headers: { 'Content-Type': 'application/json' } });
+      } else if (guidesPath === '/u' || guidesPath.startsWith('/u/')) {
+        const rest = guidesPath === '/u' ? '' : guidesPath.slice(3);
+        const segs = rest.split('/').filter(Boolean);
+        if (segs[1]) {
+          return Response.redirect('https://guides.trujillomingorance.com/g/' + encodeURIComponent(slugifySlug(segs[1])), 301);
+        }
+        const handle = slugifyHandle((segs[0] || '').replace(/^@/, ''));
+        const index = handle
+          ? await readJsonArray(env.BOT_MEMORY, userIndexKey('guide', handle))
+          : await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
+        return new Response(renderArtifactIndex(index, handle ? { handle } : null), {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=30' }
+        });
+      } else {
+        const slug = slugifySlug(guidesPath === '/g' ? '' : guidesPath.slice(3).split('/')[0]);
+        if (!slug) {
+          const index = await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
+          return new Response(renderArtifactIndex(index), {
+            status: 200,
+            headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=30' }
+          });
+        }
+        let record = await loadPubRecord(env, 'guide', '', slug);
+        if (!record) {
+          return new Response(renderArtifactMissing(), { status: 404, headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'no-store' } });
+        }
+        record.dest = 'guide';
+        return new Response(renderArtifactPage(record), {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=30, s-maxage=120' }
+        });
+      }
     }
 
     // Redirección canónica de subdominios alias a Trujillo AI
