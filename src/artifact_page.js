@@ -253,7 +253,7 @@ function wrap(title, inner, extraBar, poster) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)} · Library · Trujillo AI</title>
+<title>${esc(title)} · Trujillo AI</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#080c14">
 <link rel="icon" href="/avatar.png">
@@ -270,8 +270,8 @@ ${inner}
 </html>`;
 }
 
-function itemHref(it) {
-  return LIBRARY_PREFIX + '/' + encodeURIComponent(it.slug);
+function itemHref(it, prefix) {
+  return (prefix || LIBRARY_PREFIX) + '/' + encodeURIComponent(it.slug);
 }
 
 function extrasHtml(item) {
@@ -348,9 +348,10 @@ export function renderArtifactIndex(items, opts) {
     const by = h
       ? `<div class="card-by"><img src="${esc(pic)}" alt=""><span>@${esc(h)}</span></div>`
       : '';
-    return `<a class="card" href="${itemHref(it)}">${by}<h2>${esc(it.title || it.slug)}</h2><p>/library/${esc(it.slug)}</p></a>`;
+    const pref = (opts && opts.prefix) || LIBRARY_PREFIX;
+    return `<a class="card" href="${itemHref(it, pref)}">${by}<h2>${esc(it.title || it.slug)}</h2><p>${esc(pref)}/${esc(it.slug)}</p></a>`;
   }).join('');
-  const heading = handle ? '@' + handle : 'Library';
+  const heading = handle ? '@' + handle : ((opts && opts.heading) || 'Library');
   const inner = cards
     ? `<div class="grid">${cards}</div>`
     : `<div class="empty"><h1>${esc(heading)}</h1><p>${handle ? 'Este autor aún no ha publicado en su library.' : 'Publica desde el studio. La URL es automática: ' + ORIGIN + '/library/slug'}</p></div>`;

@@ -344,7 +344,7 @@ export default {
         const index = handle
           ? await readJsonArray(env.BOT_MEMORY, userIndexKey('guide', handle))
           : await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
-        return new Response(renderArtifactIndex(index, handle ? { handle } : null), {
+        return new Response(renderArtifactIndex(index, { handle: handle || undefined, prefix: '/g', heading: 'Comunidad' }), {
           status: 200,
           headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=30' }
         });
@@ -352,7 +352,7 @@ export default {
         const slug = slugifySlug(guidesPath === '/g' ? '' : guidesPath.slice(3).split('/')[0]);
         if (!slug) {
           const index = await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
-          return new Response(renderArtifactIndex(index), {
+          return new Response(renderArtifactIndex(index, { prefix: '/g', heading: 'Comunidad' }), {
             status: 200,
             headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=30' }
           });
