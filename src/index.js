@@ -382,7 +382,7 @@ export default {
         await upsertIndex(env, userIndexKey('guide', handle), indexItem(record), slug);
         await upsertIndex(env, publicIndexKey('guide'), indexItem(record), slug, handle);
         const pub = await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
-        return guidesJson({ success: true, count: pub.length, slug, url: publicUrl('guide', handle, slug) }, 200);
+        return guidesJson({ success: true, count: mergeGuideFeed(pub).length, slug, url: publicUrl('guide', handle, slug) }, 200);
       }
       if (guidesPath.startsWith('/api/guides')) {
         return guidesJson({ error: 'method_not_allowed' }, 405);
