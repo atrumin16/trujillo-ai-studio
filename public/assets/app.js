@@ -1009,8 +1009,8 @@
     var h = myHandle() || 'usuario';
     if (hint) {
       hint.textContent = artifactDest === 'guide'
-        ? 'Se publica en Guides, en tu tablero /u/@' + h + '/… Hace falta cuenta registrada.'
-        : 'Se publica en Library: ai.trujillomingorance.com/library/@' + h + '/… Funciona también con /es/library/…';
+        ? 'Se publica en Guides: guides.trujillomingorance.com/g/slug (URL automática).'
+        : 'Se publica en Library: ai.trujillomingorance.com/library/slug (URL automática, sin @usuario).';
     }
   }
   function syncArtifactActions() {
@@ -1074,14 +1074,6 @@
     currentArtifact.dest = dest;
     currentArtifact.title = clampArtTitle(currentArtifact.title || '');
     var handle = myHandle() || 'usuario';
-    var prefix = dest === 'guide'
-      ? 'guides.trujillomingorance.com/u/@' + handle + '/'
-      : 'ai.trujillomingorance.com/library/@' + handle + '/';
-    var suggested = currentArtifact.slug || slugifyArtifact(currentArtifact.title) || ('art-' + Date.now().toString(36));
-    var slug = window.prompt('URL pública: ' + prefix, suggested);
-    if (!slug) return;
-    slug = slugifyArtifact(slug);
-    if (!slug) return;
     var btn = document.getElementById('art-publish-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Publicando…'; }
     try {
@@ -1090,7 +1082,7 @@
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
         body: JSON.stringify({
           title: currentArtifact.title,
-          slug: slug,
+          slug: currentArtifact.slug || '',
           content: currentArtifact.content,
           lang: currentArtifact.lang || 'markdown',
           dest: dest,
@@ -1644,7 +1636,7 @@
         e.stopPropagation();
         window.open(a.url || (a.dest === 'guide'
           ? ('https://guides.trujillomingorance.com/u/@' + (a.handle || '') + '/' + a.slug)
-          : ('/library/@' + (a.handle || '') + '/' + a.slug)), '_blank', 'noopener');
+          : ('/library/' + a.slug)), '_blank', 'noopener');
       });
       var preview = document.createElement('button');
       preview.type = 'button';

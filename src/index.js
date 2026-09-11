@@ -16,6 +16,7 @@ import {
   clampTitle,
   normalizeExtras,
   LIBRARY_PREFIX,
+  slugPointerKey,
   readJsonArray,
   recordKey,
   resolvePicture,
@@ -615,6 +616,9 @@ export default {
         let index = await readJsonArray(env.BOT_MEMORY, publicIndexKey('artifact'));
         if (!index.length) index = await readJsonArray(env.BOT_MEMORY, 'art:index');
         body = renderArtifactIndex(index);
+      } else if (parsed.redirectTo) {
+        const loc = ARTIFACT_ORIGIN + (pathLang ? '/' + pathLang : '') + parsed.redirectTo + url.search;
+        return Response.redirect(loc, 301);
       } else if (parsed.kind === 'author') {
         const index = await readJsonArray(env.BOT_MEMORY, userIndexKey('artifact', parsed.handle));
         const meta = index[0] || { handle: parsed.handle };
@@ -759,7 +763,7 @@ export default {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        const slug = slugifySlug(body.slug || title);
+        const slug = await allocatePublicSlug(env, dest, handle, title, body.slug);
         if (!slug || slug.length < 2) {
           return new Response(JSON.stringify({ error: 'Slug no válido' }), {
             status: 400,
@@ -803,6 +807,7 @@ export default {
           updatedAt: now
         };
         await env.BOT_MEMORY.put(key, JSON.stringify(record));
+        await env.BOT_MEMORY.put(slugPointerKey(dest, slug), JSON.stringify({ handle, dest, slug, authorId: user.id || '' }));
         if (dest === 'artifact') {
           const legacy = await loadJsonRecord(env, 'art:' + slug);
           if (!legacy || ownsRecord(user, legacy)) {
@@ -973,6 +978,7 @@ export default {
           });
         }
         await env.BOT_MEMORY.delete(key);
+        await env.BOT_MEMORY.delete(slugPointerKey(dest, slug));
         if (legacy && ownsRecord(user, legacy)) await env.BOT_MEMORY.delete('art:' + slug);
         await dropFromIndex(env, userIndexKey(dest, handle), slug);
         await dropFromIndex(env, publicIndexKey(dest), slug, handle);
@@ -4367,10 +4373,27 @@ async function loadJsonRecord(env, key) {
   try { return JSON.parse(raw); } catch (e) { return null; }
 }
 
+async function allocatePublicSlug(env, dest, handle, title, requested) {
+  const preferred = slugifySlug(requested) || slugifySlug(title) || ('pieza-' + Date.now().toString(36));
+  for (let i = 0; i < 40; i++) {
+    const slug = i === 0 ? preferred : (preferred.slice(0, 40) + '-' + (i + 1));
+    const ptr = await loadJsonRecord(env, slugPointerKey(dest, slug));
+    if (!ptr || ptr.handle === handle) return slug;
+    const own = await loadJsonRecord(env, recordKey(dest, handle, slug));
+    if (own) return slug;
+  }
+  return preferred.slice(0, 32) + '-' + Date.now().toString(36);
+}
+
 async function loadPubRecord(env, dest, handle, slug) {
   if (!slug) return null;
   if (handle) {
     const rec = await loadJsonRecord(env, recordKey(dest, handle, slug));
+    if (rec) return rec;
+  }
+  const ptr = await loadJsonRecord(env, slugPointerKey(dest, slug));
+  if (ptr && ptr.handle) {
+    const rec = await loadJsonRecord(env, recordKey(dest, ptr.handle, slug));
     if (rec) return rec;
   }
   if (dest === 'artifact') {

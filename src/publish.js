@@ -68,14 +68,18 @@ export function clampTitle(value) {
   return (sp >= 36 ? cut.slice(0, sp) : cut).replace(/[–—:,.-]+$/, '').trim();
 }
 
+export function slugPointerKey(dest, slug) {
+  return 'pub:' + (dest === 'guide' ? 'guide' : 'artifact') + ':' + slug;
+}
+
 export function publicUrl(dest, handle, slug) {
-  if (dest === 'guide') return GUIDES_ORIGIN + '/u/@' + handle + '/' + slug;
-  return ARTIFACT_ORIGIN + LIBRARY_PREFIX + '/@' + handle + '/' + slug;
+  if (dest === 'guide') return GUIDES_ORIGIN + '/g/' + slug;
+  return ARTIFACT_ORIGIN + LIBRARY_PREFIX + '/' + slug;
 }
 
 export function authorBoardUrl(dest, handle) {
   if (dest === 'guide') return GUIDES_ORIGIN + '/u/@' + handle;
-  return ARTIFACT_ORIGIN + LIBRARY_PREFIX + '/@' + handle;
+  return ARTIFACT_ORIGIN + LIBRARY_PREFIX;
 }
 
 export function letterAvatarDataUri(name, handle) {
@@ -196,6 +200,16 @@ export function parsePubPath(pathname) {
   } else {
     return null;
   }
+  const parts = rest.split('/').filter(Boolean);
+  if (!parts.length) return { kind: 'global', prefix };
+  if (parts[0].startsWith('@')) {
+    const parsed = parseArtifactPath('/artifact/' + rest, prefix);
+    if (parsed && parsed.kind === 'item') return { ...parsed, redirectTo: LIBRARY_PREFIX + '/' + parsed.slug };
+    return parsed;
+  }
+  const slug = slugifySlug(parts[0]);
+  if (!slug) return { kind: 'missing', prefix };
+  if (parts.length === 1) return { kind: 'item', slug, prefix };
   return parseArtifactPath('/artifact/' + rest, prefix);
 }
 
