@@ -176,8 +176,32 @@ export function getAuthPageHtml(initialTab = 'login') {
   <script>
     let pendingVerifyEmail = '';
     let pendingResetEmail = '';
-    if (localStorage.getItem('trujillo_ai_token')) { window.location.href = '/'; }
     const urlParams = new URLSearchParams(window.location.search);
+    function isAllowedReturn(url) {
+      if (!url) return false;
+      if (url.startsWith('/') && !url.startsWith('//')) return true;
+      try {
+        const u = new URL(url);
+        return u.hostname === 'trujillomingorance.com' || u.hostname.endsWith('.trujillomingorance.com') || u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+      } catch(e) {
+        return false;
+      }
+    }
+    const initialRedirect = urlParams.get('redirect_to') || urlParams.get('return') || urlParams.get('next');
+    if (localStorage.getItem('trujillo_ai_token')) {
+      if (initialRedirect && isAllowedReturn(initialRedirect)) {
+        window.location.href = initialRedirect;
+      } else if (window.opener && window.opener !== window) {
+        try {
+          window.opener.postMessage({ type: 'AUTH_SUCCESS', token: localStorage.getItem('trujillo_ai_token') }, '*');
+          window.close();
+        } catch (e) {
+          window.location.href = '/';
+        }
+      } else {
+        window.location.href = '/';
+      }
+    }
     if (urlParams.get('tab') === 'forgot') { setTimeout(() => switchAuthTab('forgot'), 50); }
 
     function showAlert(msg, isSuccess = false) {
@@ -208,16 +232,6 @@ export function getAuthPageHtml(initialTab = 'login') {
       else if (tab === 'forgot') { forgotForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
       else if (tab === 'reset') { resetForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
     }
-    function isAllowedReturn(url) {
-      if (!url) return false;
-      if (url.startsWith('/') && !url.startsWith('//')) return true;
-      try {
-        const u = new URL(url);
-        return u.hostname === 'trujillomingorance.com' || u.hostname.endsWith('.trujillomingorance.com') || u.hostname === 'localhost' || u.hostname === '127.0.0.1';
-      } catch(e) {
-        return false;
-      }
-    }
     function finishLogin(data) {
       localStorage.setItem('trujillo_ai_token', data.token);
       localStorage.setItem('auth_token', data.token);
@@ -227,6 +241,13 @@ export function getAuthPageHtml(initialTab = 'login') {
       document.cookie = 'ta_session=' + encodeURIComponent(data.token) + '; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=2592000';
       document.cookie = ['auth', 'token'].join('_') + '=' + encodeURIComponent(data.token) + '; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=2592000';
       showAlert('Listo. Entrando al workspace...', true);
+      if (window.opener && window.opener !== window) {
+        try {
+          window.opener.postMessage({ type: 'AUTH_SUCCESS', token: data.token, user: data.user }, '*');
+          setTimeout(() => { window.close(); }, 300);
+          return;
+        } catch (e) {}
+      }
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect_to') || params.get('return') || params.get('next');
       if (redirectTo && isAllowedReturn(redirectTo)) {

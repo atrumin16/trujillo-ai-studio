@@ -216,7 +216,29 @@
     var X_CLIENT_ID = 'NF94WVVIT1dzSXZNaTJuYjRXSEc6MTpjaQ';
     var urlParams = new URLSearchParams(window.location.search);
     var isXCallback = urlParams.get('auth') === 'x_callback' || (urlParams.get('state') || '').indexOf('x_oauth_') === 0;
+    function isAllowedReturn(url) {
+      if (!url) return false;
+      if (url.startsWith('/') && !url.startsWith('//')) return true;
+      try {
+        var u = new URL(url);
+        return u.hostname === 'trujillomingorance.com' || u.hostname.endsWith('.trujillomingorance.com') || u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+      } catch(e) {
+        return false;
+      }
+    }
+    var initialRedirect = urlParams.get('redirect_to') || urlParams.get('return') || urlParams.get('next');
     if (!isXCallback && localStorage.getItem('trujillo_ai_token')) {
+      if (initialRedirect && isAllowedReturn(initialRedirect)) {
+        window.location.href = initialRedirect;
+        return;
+      }
+      if (window.opener && window.opener !== window) {
+        try {
+          window.opener.postMessage({ type: 'AUTH_SUCCESS', token: localStorage.getItem('trujillo_ai_token') }, '*');
+          window.close();
+          return;
+        } catch (e) {}
+      }
       window.location.href = '/';
       return;
     }
@@ -285,17 +307,6 @@
       else if (tab === 'forgot') { forgotForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
       else if (tab === 'reset') { resetForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
       else if (tab === 'mailconfirm' && mailForm) { mailForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
-    }
-    function isAllowedReturn(url) {
-      if (!url) return false;
-      if (url.startsWith('/') && !url.startsWith('//')) return true;
-      try {
-        var u = new URL(url);
-        return u.hostname === 'trujillomingorance.com' || u.hostname.endsWith('.trujillomingorance.com') || u.hostname === 'localhost' || u.hostname === '127.0.0.1';
-      } catch(e) {
-        return false;
-      }
-    }
     function finishLogin(data) {
       localStorage.setItem('trujillo_ai_token', data.token);
       localStorage.setItem('auth_token', data.token);
@@ -305,6 +316,13 @@
       localStorage.setItem('trujillo_ai_user', JSON.stringify(data.user));
       localStorage.setItem('auth_user', JSON.stringify(data.user));
       showAlert('Listo. Entrando al workspace...', true);
+      if (window.opener && window.opener !== window) {
+        try {
+          window.opener.postMessage({ type: 'AUTH_SUCCESS', token: data.token, user: data.user }, '*');
+          setTimeout(function () { window.close(); }, 300);
+          return;
+        } catch (e) {}
+      }
       var params = new URLSearchParams(window.location.search);
       var redirectTo = params.get('redirect_to') || params.get('return') || params.get('next');
       if (redirectTo && isAllowedReturn(redirectTo)) {
