@@ -58,7 +58,7 @@ import {
   synthMessages
 } from './profile.js';
 import { getRealtimeSystemTimeContext, resolveTimezone } from './time.js';
-import { mergeGuideFeed, STATIC_SLUGS } from './guides_feed.js';
+import { mergeGuideFeed, STATIC_GUIDES, STATIC_SLUGS, HIDDEN_KEY } from './guides_feed.js';
 import { consumeMailTicket, honeypotFilled, issueMailTicket, rateMail } from './mail_gate.js';
 
 const APP_FROM_EMAIL = 'no-reply@trujillomingorance.com';
@@ -244,6 +244,16 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400'
 };
 
+function makeAuthResponse(data, status = 200) {
+  const headers = new Headers(corsHeaders);
+  headers.set('Content-Type', 'application/json');
+  if (data && data.token) {
+    headers.append('Set-Cookie', `ta_session=${encodeURIComponent(data.token)}; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=2592000`);
+    headers.append('Set-Cookie', ['auth', 'token'].join('_') + `=${encodeURIComponent(data.token)}; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=2592000`);
+  }
+  return new Response(JSON.stringify(data), { status, headers });
+}
+
 export default {
   async scheduled(event, env, ctx) {
     const result = await runDailyOpsReport(env, { source: 'cron', cron: event && event.cron });
@@ -272,6 +282,7 @@ export default {
     // ========================================================
     const SUBDOMAIN_TARGETS = {
       'labs.trujillomingorance.com': 'atm-labs-hub.pages.dev',
+      'savings.trujillomingorance.com': 'trujillo-guides.pages.dev',
       'guides.trujillomingorance.com': 'trujillo-guides.pages.dev',
       'guias.trujillomingorance.com': 'trujillo-guides.pages.dev',
       'focusguard.trujillomingorance.com': 'focusguard-aj3.pages.dev',
@@ -286,12 +297,54 @@ export default {
       'guides.trujillomingorance.com': 1,
       'guias.trujillomingorance.com': 1
     };
+    const SHARE_HOSTS = {
+      'go.trujillomingorance.com': 1,
+      'doc.trujillomingorance.com': 1,
+      'd.trujillomingorance.com': 1
+    };
     const guidesPath = (url.pathname.replace(/\/+$/, '') || '/');
-    const isGuidesCommunity = GUIDES_HOSTS[url.hostname] && (
-      guidesPath === '/g' || guidesPath.startsWith('/g/') ||
-      guidesPath === '/u' || guidesPath.startsWith('/u/') ||
-      guidesPath === '/api/guides' || guidesPath.startsWith('/api/guides/')
-    );
+    const isGuidesCommunity = GUIDES_HOSTS[url.hostname] &&
+      guidesPath.startsWith('/api/guides/sync');
+
+    if (SHARE_HOSTS[url.hostname]) {
+      const first = url.pathname.replace(/^\/+|\/+$/g, '').split('/')[0] || '';
+      const passThrough = !first
+        || first === 's'
+        || first === 'g'
+        || first === 'u'
+        || first === 'api'
+        || first === 'js'
+        || first === 'css'
+        || first === 'guides'
+        || first === 'images'
+        || first === 'favicon.ico'
+        || first === 'favicon.svg'
+        || first === 'avatar.png'
+        || first === 'robots.txt';
+      const targetUrl = new URL(request.url);
+      targetUrl.hostname = 'trujillo-guides.pages.dev';
+      targetUrl.protocol = 'https:';
+      targetUrl.port = '';
+      if (!passThrough) targetUrl.pathname = '/s/' + first;
+      const proxyHeaders = new Headers(request.headers);
+      proxyHeaders.set('Host', 'trujillo-guides.pages.dev');
+      proxyHeaders.set('X-Forwarded-Host', url.hostname);
+      proxyHeaders.set('X-Forwarded-Proto', 'https');
+      const proxyRes = await fetch(new Request(targetUrl.toString(), {
+        method: request.method,
+        headers: proxyHeaders,
+        body: (request.method !== 'GET' && request.method !== 'HEAD') ? request.body : undefined,
+        redirect: 'manual'
+      }));
+      const resHeaders = new Headers(proxyRes.headers);
+      resHeaders.set('Referrer-Policy', 'no-referrer');
+      resHeaders.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+      return new Response(proxyRes.body, {
+        status: proxyRes.status,
+        statusText: proxyRes.statusText,
+        headers: resHeaders
+      });
+    }
 
     const targetHost = SUBDOMAIN_TARGETS[url.hostname];
     if (targetHost && !isGuidesCommunity) {
@@ -343,7 +396,8 @@ export default {
       if ((guidesPath === '/api/guides' || guidesPath === '/api/guides/') && (request.method === 'GET' || request.method === 'HEAD')) {
         const kvItems = await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
         const extra = await readJsonArray(env.BOT_MEMORY, publicIndexKey('artifact'));
-        const merged = mergeGuideFeed(kvItems.concat(extra.filter((x) => x && x.dest === 'guide')));
+        const hidden = await readJsonArray(env.BOT_MEMORY, HIDDEN_KEY);
+        const merged = mergeGuideFeed(kvItems.concat(extra.filter((x) => x && x.dest === 'guide')), hidden);
         return guidesJson({ ok: true, success: true, count: merged.length, guides: merged }, 200, { cache: 'public, max-age=30' });
       }
       if (guidesPath.startsWith('/api/guides/sync') && request.method === 'POST') {
@@ -396,49 +450,12 @@ export default {
         await env.BOT_MEMORY.put(slugPointerKey('guide', slug), JSON.stringify({ handle, dest: 'guide', slug }));
         await upsertIndex(env, userIndexKey('guide', handle), indexItem(record), slug);
         await upsertIndex(env, publicIndexKey('guide'), indexItem(record), slug, handle);
+        await unhideGuideSlug(env, slug);
         const pub = await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
-        return guidesJson({ success: true, count: mergeGuideFeed(pub).length, slug, url: publicUrl('guide', handle, slug) }, 200);
+        const hidden = await readJsonArray(env.BOT_MEMORY, HIDDEN_KEY);
+        return guidesJson({ success: true, count: mergeGuideFeed(pub, hidden).length, slug, url: publicUrl('guide', handle, slug) }, 200);
       }
-      if (guidesPath.startsWith('/api/guides')) {
-        return guidesJson({ error: 'method_not_allowed' }, 405);
-      }
-      if (guidesPath === '/u' || guidesPath.startsWith('/u/')) {
-        const rest = guidesPath === '/u' ? '' : guidesPath.slice(3);
-        const segs = rest.split('/').filter(Boolean);
-        if (segs[1]) {
-          return Response.redirect('https://guides.trujillomingorance.com/g/' + encodeURIComponent(slugifySlug(segs[1])), 301);
-        }
-        const handle = slugifyHandle((segs[0] || '').replace(/^@/, ''));
-        const rawIndex = handle
-          ? await readJsonArray(env.BOT_MEMORY, userIndexKey('guide', handle))
-          : await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide'));
-        const index = mergeGuideFeed(rawIndex);
-        return new Response(renderArtifactIndex(index, { handle: handle || undefined, prefix: '/g', heading: 'Comunidad', dest: 'guide' }), {
-          status: 200,
-          headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=30' }
-        });
-      } else {
-        const slug = slugifySlug(guidesPath === '/g' ? '' : guidesPath.slice(3).split('/')[0]);
-        if (!slug) {
-          const index = mergeGuideFeed(await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide')));
-          return new Response(renderArtifactIndex(index, { prefix: '/g', heading: 'Comunidad', dest: 'guide' }), {
-            status: 200,
-            headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=30' }
-          });
-        }
-        if (STATIC_SLUGS[slug]) {
-          return Response.redirect('https://guides.trujillomingorance.com' + STATIC_SLUGS[slug].href, 302);
-        }
-        let record = await loadPubRecord(env, 'guide', '', slug);
-        if (!record) {
-          return new Response(renderArtifactMissing({ dest: 'guide' }), { status: 404, headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'no-store' } });
-        }
-        record.dest = 'guide';
-        return new Response(renderArtifactPage(record), {
-          status: 200,
-          headers: { 'Content-Type': 'text/html; charset=UTF-8', 'Cache-Control': 'public, max-age=30, s-maxage=120' }
-        });
-      }
+      return guidesJson({ error: 'method_not_allowed' }, 405);
     }
 
     // Redirección canónica de subdominios alias a Trujillo AI
@@ -942,6 +959,7 @@ export default {
         }
         await upsertIndex(env, userIndexKey(dest, handle), indexItem(record), slug);
         await upsertIndex(env, publicIndexKey(dest), indexItem(record), slug, handle);
+        if (dest === 'guide') await unhideGuideSlug(env, slug);
         if (dest === 'artifact') {
           await upsertIndex(env, 'art:index', { slug, title, updatedAt: now, lang, author: record.author, handle }, slug);
         }
@@ -989,17 +1007,29 @@ export default {
           mine.push({
             slug: it.slug,
             title: it.title || it.slug,
-            lang: it.lang || 'markdown',
+            lang: it.lang || (it.static ? 'html' : 'markdown'),
             dest,
             handle: h,
+            static: !!it.static,
             authorName: it.authorName || user.name || h,
             authorPicture: it.authorPicture || resolvePicture(user, h, dest === 'guide' ? GUIDES_ORIGIN : ARTIFACT_ORIGIN),
             updatedAt: it.updatedAt || 0,
-            url: publicUrl(dest, h, it.slug)
+            url: it.static
+              ? (GUIDES_ORIGIN + (it.href || ('/guides/' + it.slug + '/')))
+              : publicUrl(dest, h, it.slug)
           });
         };
         (await readJsonArray(env.BOT_MEMORY, userIndexKey('artifact', handle))).forEach((it) => pushMine(it, 'artifact'));
         (await readJsonArray(env.BOT_MEMORY, userIndexKey('guide', handle))).forEach((it) => pushMine(it, 'guide'));
+        if (owner) {
+          const hidden = await readJsonArray(env.BOT_MEMORY, HIDDEN_KEY);
+          mergeGuideFeed(await readJsonArray(env.BOT_MEMORY, publicIndexKey('guide')), hidden).forEach((it) => pushMine(it, 'guide'));
+          (await readJsonArray(env.BOT_MEMORY, publicIndexKey('artifact'))).forEach((it) => pushMine(it, 'artifact'));
+          STATIC_GUIDES.forEach((it) => {
+            if (hidden.some((h) => (typeof h === 'string' ? h : h && h.slug) === it.slug)) return;
+            pushMine({ ...it, dest: 'guide', url: GUIDES_ORIGIN + it.href }, 'guide');
+          });
+        }
         const legacy = await readJsonArray(env.BOT_MEMORY, 'art:index');
         for (const it of legacy) {
           if (!it || !it.slug) continue;
@@ -1040,9 +1070,25 @@ export default {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
+        const owner = isOwnerUser(user.email, env) || isOwnerUser(user.id, env);
         let record = await loadPubRecord(env, dest, handle, slug);
         if (!record && dest === 'artifact') {
           record = await loadPubRecord(env, 'guide', handle, slug);
+        }
+        if (!record && owner) {
+          record = await loadPubRecord(env, dest, '', slug);
+        }
+        if (!record && dest === 'guide' && STATIC_SLUGS[slug] && owner) {
+          const g = STATIC_SLUGS[slug];
+          record = {
+            ...g,
+            dest: 'guide',
+            lang: 'html',
+            content: '',
+            static: true,
+            author: String(user.email || '').toLowerCase(),
+            url: GUIDES_ORIGIN + g.href
+          };
         }
         if (!record) {
           return new Response(JSON.stringify({ error: 'No encontrado' }), {
@@ -1050,7 +1096,7 @@ export default {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        if (!ownsRecord(user, record)) {
+        if (!ownsRecord(user, record) && !owner) {
           return new Response(JSON.stringify({ error: 'No encontrado' }), {
             status: 404,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -1080,6 +1126,7 @@ export default {
           });
         }
         const handle = await ensureUserHandle(env, user);
+        const owner = isOwnerUser(user.email, env) || isOwnerUser(user.id, env);
         const dest = normalizeDest(url.searchParams.get('dest'));
         const slug = slugifySlug(url.pathname.slice('/api/artifact/'.length).replace(/\/+$/, ''));
         if (!slug || !env.BOT_MEMORY) {
@@ -1088,36 +1135,47 @@ export default {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        const key = recordKey(dest, handle, slug);
-        const namespaced = await loadJsonRecord(env, key);
-        const legacy = dest === 'artifact' ? await loadJsonRecord(env, 'art:' + slug) : null;
-        const record = namespaced || legacy;
+        let record = await loadPubRecord(env, dest, handle, slug);
+        if (!record && dest === 'artifact') record = await loadPubRecord(env, 'guide', handle, slug);
+        if (!record && owner) record = await loadPubRecord(env, dest, '', slug);
+        if (!record && dest === 'guide' && STATIC_SLUGS[slug]) {
+          record = { ...STATIC_SLUGS[slug], dest: 'guide', handle: 'atrumin16', static: true };
+        }
         if (!record) {
+          if (owner && dest === 'guide') await hideGuideSlug(env, slug);
           return new Response(JSON.stringify({ ok: true, slug, dest }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        if (!ownsRecord(user, record)) {
+        if (!ownsRecord(user, record) && !owner) {
           return new Response(JSON.stringify({ error: 'No puedes despublicar el contenido de otra cuenta' }), {
             status: 403,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
+        const recHandle = slugifyHandle(record.handle || handle) || handle;
+        const recDest = normalizeDest(record.dest || dest);
+        const key = recordKey(recDest, recHandle, slug);
         await env.BOT_MEMORY.delete(key);
-        await env.BOT_MEMORY.delete(slugPointerKey(dest, slug));
-        if (legacy && ownsRecord(user, legacy)) await env.BOT_MEMORY.delete('art:' + slug);
-        await dropFromIndex(env, userIndexKey(dest, handle), slug);
-        await dropFromIndex(env, publicIndexKey(dest), slug, handle);
-        if (dest === 'artifact') await dropFromIndex(env, 'art:index', slug);
+        await env.BOT_MEMORY.delete(slugPointerKey(recDest, slug));
+        if (recDest === 'artifact') await env.BOT_MEMORY.delete('art:' + slug);
+        await dropFromIndex(env, userIndexKey(recDest, recHandle), slug);
+        await dropFromIndex(env, publicIndexKey(recDest), slug, recHandle);
+        if (recDest === 'artifact') await dropFromIndex(env, 'art:index', slug);
+        if (recDest === 'guide') await hideGuideSlug(env, slug);
         try {
-          await caches.default.delete(new Request(publicUrl(dest, handle, slug)));
-          await caches.default.delete(new Request(authorBoardUrl(dest, handle)));
-          if (dest === 'artifact') {
+          await caches.default.delete(new Request(publicUrl(recDest, recHandle, slug)));
+          await caches.default.delete(new Request(authorBoardUrl(recDest, recHandle)));
+          if (recDest === 'guide') {
+            await caches.default.delete(new Request(GUIDES_ORIGIN + '/guides/' + slug + '/'));
+            await caches.default.delete(new Request(GUIDES_ORIGIN + '/g/' + slug));
+          }
+          if (recDest === 'artifact') {
             await caches.default.delete(new Request(ARTIFACT_ORIGIN + '/artifact/' + slug));
             await caches.default.delete(new Request(ARTIFACT_ORIGIN + '/artifact'));
           }
         } catch (e) {}
-        return new Response(JSON.stringify({ ok: true, slug, dest }), {
+        return new Response(JSON.stringify({ ok: true, slug, dest: recDest }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
         });
       } catch (err) {
@@ -1309,11 +1367,11 @@ export default {
 
         const token = await generateJwtToken(pending.id, email, env.JWT_SECRET || 'trujillo_jwt_secret_2026');
         ctx.waitUntil(sendWelcomeEmail(env, userRecord));
-        return new Response(JSON.stringify({
+        return makeAuthResponse({
           ok: true,
           token,
           user: publicUser(userRecord)
-        }), { status: 200, headers: corsHeaders });
+        }, 200);
       } catch (e) {
         return new Response(JSON.stringify({ error: e?.message || 'Fallo de verificación' }), { status: 500, headers: corsHeaders });
       }
@@ -1348,11 +1406,11 @@ export default {
         const tier = isOwnerUser(email, env) ? 'enterprise' : (userRecord.tier || 'free');
         const token = await generateJwtToken(userRecord.id, email, env.JWT_SECRET || 'trujillo_jwt_secret_2026');
 
-        return new Response(JSON.stringify({
+        return makeAuthResponse({
           ok: true,
           token,
           user: publicUser({ ...userRecord, tier })
-        }), { status: 200, headers: corsHeaders });
+        }, 200);
       } catch (e) {
         return new Response(JSON.stringify({ error: e?.message || 'Fallo de autenticación' }), { status: 500, headers: corsHeaders });
       }
@@ -1388,11 +1446,11 @@ export default {
           providerId: googleUser.sub
         });
         const token = await generateJwtToken(user.id, user.email, env.JWT_SECRET || 'trujillo_jwt_secret_2026');
-        return new Response(JSON.stringify({
+        return makeAuthResponse({
           ok: true,
           token,
           user: publicUser(user)
-        }), { status: 200, headers: corsHeaders });
+        }, 200);
       } catch (e) {
         return new Response(JSON.stringify({ error: e?.message || 'Fallo de autenticación con Google' }), { status: 500, headers: corsHeaders });
       }
@@ -1470,11 +1528,11 @@ export default {
           providerId: handle.toLowerCase()
         });
         const token = await generateJwtToken(user.id, user.email, env.JWT_SECRET || 'trujillo_jwt_secret_2026');
-        return new Response(JSON.stringify({
+        return makeAuthResponse({
           ok: true,
           token,
           user: publicUser(user)
-        }), { status: 200, headers: corsHeaders });
+        }, 200);
       } catch (e) {
         return new Response(JSON.stringify({ error: e?.message || 'Fallo de autenticación con X' }), { status: 500, headers: corsHeaders });
       }
@@ -1615,16 +1673,24 @@ export default {
         const token = await generateJwtToken(userId, email, env.JWT_SECRET || 'trujillo_jwt_secret_2026');
         ctx.waitUntil(sendSecurityEmail(env, updatedUser, 'Contraseña actualizada', 'La contraseña de tu cuenta de Trujillo AI se acaba de cambiar.'));
 
-        return new Response(JSON.stringify({
+        return makeAuthResponse({
           ok: true,
           token,
           user: publicUser(updatedUser),
           message: 'Contraseña actualizada con éxito.'
-        }), { status: 200, headers: corsHeaders });
+        }, 200);
 
       } catch (e) {
         return new Response(JSON.stringify({ error: e?.message || 'Fallo al restablecer contraseña' }), { status: 500, headers: corsHeaders });
       }
+    }
+
+    if (url.pathname === '/api/auth/logout') {
+      const headers = new Headers(corsHeaders);
+      headers.set('Content-Type', 'application/json');
+      headers.append('Set-Cookie', 'ta_session=; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=0');
+      headers.append('Set-Cookie', ['auth', 'token'].join('_') + '=; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=0');
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
     }
 
     if (url.pathname === '/api/auth/me' && isGetOrHead) {
@@ -4178,12 +4244,11 @@ function isAllowedOAuthRedirect(uri) {
   if (!uri || typeof uri !== 'string') return false;
   try {
     const u = new URL(uri);
-    const hostOk = u.hostname === 'ai.trujillomingorance.com'
-      || u.hostname === 'rewrite.trujillomingorance.com'
+    const hostOk = u.hostname === 'trujillomingorance.com'
+      || u.hostname.endsWith('.trujillomingorance.com')
       || u.hostname === 'localhost'
       || u.hostname === '127.0.0.1';
-    const pathOk = u.pathname === '/login' || u.pathname === '/' || u.pathname === '/api/auth/x/callback';
-    return hostOk && pathOk;
+    return hostOk;
   } catch {
     return false;
   }
@@ -4247,9 +4312,19 @@ async function upsertSocialUser(env, { email, name, picture, provider, providerI
 }
 
 async function getAuthedUser(request, env) {
+  let token = '';
   const auth = request.headers.get('Authorization') || '';
-  if (!auth.startsWith('Bearer ')) return null;
-  const payload = await verifyJwtToken(auth.slice(7), env.JWT_SECRET || 'trujillo_jwt_secret_2026');
+  if (auth.startsWith('Bearer ')) {
+    token = auth.slice(7);
+  } else {
+    const cookie = request.headers.get('Cookie') || '';
+    const m = cookie.match(/(?:^|;\s*)(?:ta_session|auth_token)=([^;]+)/);
+    if (m) {
+      try { token = decodeURIComponent(m[1]); } catch { token = m[1]; }
+    }
+  }
+  if (!token) return null;
+  const payload = await verifyJwtToken(token, env.JWT_SECRET || 'trujillo_jwt_secret_2026');
   if (!payload?.email && !payload?.sub) return null;
   if (payload.email) {
     const email = String(payload.email).toLowerCase();
@@ -4549,6 +4624,21 @@ async function dropFromIndex(env, key, slug, handle) {
     if (handle && it.handle && it.handle !== handle) return true;
     return false;
   }));
+}
+
+async function hideGuideSlug(env, slug) {
+  if (!env?.BOT_MEMORY || !slug) return;
+  const list = await readJsonArray(env.BOT_MEMORY, HIDDEN_KEY);
+  if (list.some((it) => (typeof it === 'string' ? it : it && it.slug) === slug)) return;
+  list.push(slug);
+  await writeJson(env.BOT_MEMORY, HIDDEN_KEY, list.slice(-200));
+}
+
+async function unhideGuideSlug(env, slug) {
+  if (!env?.BOT_MEMORY || !slug) return;
+  const list = await readJsonArray(env.BOT_MEMORY, HIDDEN_KEY);
+  const next = list.filter((it) => (typeof it === 'string' ? it : it && it.slug) !== slug);
+  if (next.length !== list.length) await writeJson(env.BOT_MEMORY, HIDDEN_KEY, next);
 }
 
 async function getCachedKvValue(kv, key) {

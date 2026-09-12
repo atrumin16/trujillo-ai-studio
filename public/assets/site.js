@@ -286,11 +286,32 @@
       else if (tab === 'reset') { resetForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
       else if (tab === 'mailconfirm' && mailForm) { mailForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
     }
+    function isAllowedReturn(url) {
+      if (!url) return false;
+      if (url.startsWith('/') && !url.startsWith('//')) return true;
+      try {
+        var u = new URL(url);
+        return u.hostname === 'trujillomingorance.com' || u.hostname.endsWith('.trujillomingorance.com') || u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+      } catch(e) {
+        return false;
+      }
+    }
     function finishLogin(data) {
       localStorage.setItem('trujillo_ai_token', data.token);
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('trujillo_auth_token', data.token);
+      document.cookie = 'ta_session=' + encodeURIComponent(data.token) + '; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=2592000';
+      document.cookie = ['auth', 'token'].join('_') + '=' + encodeURIComponent(data.token) + '; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=2592000';
       localStorage.setItem('trujillo_ai_user', JSON.stringify(data.user));
+      localStorage.setItem('auth_user', JSON.stringify(data.user));
       showAlert('Listo. Entrando al workspace...', true);
-      setTimeout(function () { window.location.href = '/'; }, 400);
+      var params = new URLSearchParams(window.location.search);
+      var redirectTo = params.get('redirect_to') || params.get('return') || params.get('next');
+      if (redirectTo && isAllowedReturn(redirectTo)) {
+        setTimeout(function () { window.location.href = redirectTo; }, 400);
+      } else {
+        setTimeout(function () { window.location.href = '/'; }, 400);
+      }
     }
     async function postAuth(path, body) {
       var res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -381,10 +402,7 @@
         var res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email, password: password }) });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Credenciales incorrectas');
-        localStorage.setItem('trujillo_ai_token', data.token);
-        localStorage.setItem('trujillo_ai_user', JSON.stringify(data.user));
-        showAlert('Listo. Entrando al workspace...', true);
-        setTimeout(function () { window.location.href = '/'; }, 400);
+        finishLogin(data);
       } catch (err) { showAlert(err.message); btn.disabled = false; btn.textContent = 'Continuar'; }
     };
 
@@ -430,10 +448,7 @@
         var res = await fetch('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email, code: code, newPassword: newPassword }) });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Código incorrecto o expirado');
-        localStorage.setItem('trujillo_ai_token', data.token);
-        localStorage.setItem('trujillo_ai_user', JSON.stringify(data.user));
-        showAlert('Contraseña actualizada. Entrando...', true);
-        setTimeout(function () { window.location.href = '/'; }, 400);
+        finishLogin(data);
       } catch (err) { showAlert(err.message); }
       finally { btn.disabled = false; btn.textContent = 'Guardar y entrar'; }
     };
@@ -477,10 +492,7 @@
         var res = await fetch('/api/auth/verify-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: pendingVerifyEmail, code: code }) });
         var data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Código incorrecto');
-        localStorage.setItem('trujillo_ai_token', data.token);
-        localStorage.setItem('trujillo_ai_user', JSON.stringify(data.user));
-        showAlert('Cuenta activa. Entrando...', true);
-        setTimeout(function () { window.location.href = '/'; }, 400);
+        finishLogin(data);
       } catch (err) { showAlert(err.message); btn.disabled = false; btn.textContent = 'Verificar'; }
     };
 

@@ -61,7 +61,7 @@ function csvTable(text) {
 }
 
 function mermaidDoc(src) {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:0;background:#080c14;display:flex;justify-content:center;padding:24px}</style>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:0;background:#0b0f14;display:flex;justify-content:center;padding:24px}</style>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"><\/script></head>
 <body><pre class="mermaid">${esc(src)}</pre>
 <script>mermaid.initialize({startOnLoad:true,theme:'dark',securityLevel:'strict'});<\/script></body></html>`;
@@ -102,8 +102,13 @@ export function renderMarkdown(md) {
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 1) {
       const nl = parts[i].indexOf('\n');
-      const code = nl === -1 ? parts[i] : parts[i].slice(nl + 1);
-      html += '<pre><code>' + esc(code.replace(/\n$/, '')) + '</code></pre>';
+      const fence = (nl === -1 ? '' : parts[i].slice(0, nl)).trim().toLowerCase();
+      const code = (nl === -1 ? parts[i] : parts[i].slice(nl + 1)).replace(/\n$/, '');
+      if (fence === 'mermaid') {
+        html += '<pre class="mermaid">' + esc(code) + '</pre>';
+      } else {
+        html += '<pre><code' + (fence ? ' class="lang-' + esc(fence) + '"' : '') + '>' + esc(code) + '</code></pre>';
+      }
       continue;
     }
     const lines = parts[i].split('\n');
@@ -163,70 +168,77 @@ export function renderMarkdown(md) {
 }
 
 const SHELL_CSS = `
-html,body{margin:0;height:100%;background:#080c14;color:#f8fafc;font-family:Inter,ui-sans-serif,system-ui,sans-serif}
-body{display:flex;flex-direction:column}
-.bar{min-height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(10,10,10,.94);backdrop-filter:blur(12px)}
-.brand{display:flex;align-items:center;gap:8px;color:#f8fafc;text-decoration:none;font-weight:650;letter-spacing:-.03em;font-size:13px;flex-shrink:0}
-.brand img{width:22px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,.12)}
-.bar-actions{display:flex;gap:8px;align-items:center}
-.btn{background:transparent;border:1px solid rgba(255,255,255,.12);color:#cbd5e1;border-radius:8px;padding:6px 10px;font-size:12px;text-decoration:none;cursor:pointer;font-family:inherit}
-.btn:hover{color:#fff;border-color:rgba(255,255,255,.28)}
-.article-head{flex-shrink:0;max-width:760px;width:100%;margin:0 auto;padding:28px 24px 0;box-sizing:border-box}
-.page-title{margin:0 0 12px;font-size:1.85rem;font-weight:700;line-height:1.2;color:#fff;letter-spacing:-.03em;word-break:break-word}
-.meta-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:16px;margin-bottom:24px;border-bottom:1px solid #262626}
-.by-logo{width:28px;height:28px;border-radius:999px;object-fit:cover;background:#262626;flex-shrink:0}
-.meta-line{font-size:13px;color:#a3a3a3;line-height:1.3;min-width:0;margin:0}
-.meta-line strong{color:#e5e5e5;font-weight:600}
-.meta-line a{color:#a3a3a3;text-decoration:none}
-.meta-line a:hover{color:#fff}
+:root{--bg:#0b0f14;--bg-card:#11161d;--bg-hover:#171d26;--bg-code:#0e1319;--border:#1f2937;--text:#f8fafc;--muted:#94a3b8;--dim:#64748b;--accent:#3b82f6;--pill:#2563eb}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+body{display:flex;flex-direction:column;min-height:100vh}
+.docs-topbar{display:flex;align-items:center;gap:12px;height:56px;padding:0 20px;background:rgba(11,15,20,.92);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);width:100%}
+.brand{display:inline-flex;align-items:center;gap:10px;color:var(--text);text-decoration:none;font-size:12.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;flex-shrink:0}
+.brand img{width:26px;height:26px;border-radius:6px;object-fit:cover;border:1px solid var(--border)}
+.topbar-actions{display:inline-flex;align-items:center;gap:8px;margin-left:auto}
+.hub-link,.btn{display:inline-flex;align-items:center;justify-content:center;padding:6px 12px;font-size:12px;font-weight:600;border-radius:8px;border:1px solid var(--border);background:var(--bg-code);color:var(--text);text-decoration:none;cursor:pointer;font-family:inherit}
+.hub-link:hover,.btn:hover{border-color:var(--accent);color:var(--accent)}
+.home-main,.guide-container{width:100%;margin:0 auto;padding:36px 24px 80px;flex:1;align-self:center}
+.home-main{max-width:1120px}
+.guide-container,.article-head,.community-main{max-width:720px}
+.kicker{font-family:ui-monospace,monospace;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:600;margin:0 0 12px}
+.hero h1,.page-title{font-size:clamp(1.6rem,3.6vw,2.1rem);font-weight:650;letter-spacing:-.035em;line-height:1.2;margin:0 0 12px;color:var(--text)}
+.lede{font-size:1.02rem;line-height:1.65;color:var(--muted);margin:0 0 28px;max-width:40rem}
+.guides-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;width:100%}
+.guide-card{display:flex;flex-direction:row;gap:14px;align-items:flex-start;text-decoration:none;color:inherit;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px;transition:border-color .15s,background .15s}
+.guide-card:hover{border-color:var(--accent);background:var(--bg-hover)}
+.guide-card-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
+.guide-card-body{min-width:0;flex:1}
+.guide-card h2{font-size:1.05rem;font-weight:650;letter-spacing:-.02em;color:var(--text);margin:0 0 6px;line-height:1.35}
+.guide-card p{color:var(--muted);font-size:.85rem;margin:0;line-height:1.45}
+.article-head{width:100%;margin:0 auto;padding:32px 20px 0;box-sizing:border-box}
+.meta-bar,.poster{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 0;margin:12px 0 24px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.by-logo{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
+.meta-line{font-size:13px;color:var(--muted);margin:0;min-width:0;flex:1}
+.meta-line strong{color:var(--text);font-weight:600}
 .meta-bar .btn,.meta-bar .copy-link{margin-left:auto}
-.guide-badge{display:inline-block;background:rgba(56,189,248,.12);color:#38bdf8;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid rgba(56,189,248,.25)}
-.extras{flex-shrink:0;border-top:1px solid rgba(255,255,255,.08);padding:18px 16px 28px;background:#080c14}
-.extras-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;max-width:1100px;margin:0 auto}
-.extras h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin:0 0 8px}
-.extras a,.extras p{font-size:13px;color:#cbd5e1;text-decoration:none}
-.extras a:hover{color:#7dd3fc}
-.widget{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px;background:rgba(15,22,36,.7)}
+.guide-badge,.kind{display:inline-block;background:rgba(37,99,235,.12);color:#93c5fd;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;border:1px solid rgba(37,99,235,.28);letter-spacing:.04em}
+.community-main,.doc{width:100%;margin:0 auto;padding:8px 20px 64px;line-height:1.7;color:var(--muted)}
+.doc h1,.doc h2,.doc h3{color:var(--text);letter-spacing:-.03em;line-height:1.25;font-weight:650}
+.doc h1{font-size:1.6rem;margin:0 0 16px}
+.doc h2{font-size:1.25rem;margin:28px 0 10px}
+.doc p{margin:0 0 14px}
+.doc a{color:var(--accent);text-decoration:none}
+.doc a:hover{text-decoration:underline}
+.doc ul,.doc ol{margin:0 0 16px;padding-left:1.35em}
+.doc code{font-family:ui-monospace,Cascadia Code,monospace;font-size:.86em;background:var(--bg-code);color:#93c5fd;padding:2px 6px;border-radius:4px;border:1px solid var(--border)}
+.doc pre{background:var(--bg-code);border:1px solid var(--border);border-radius:8px;padding:16px 18px;overflow:auto}
+.doc pre code{background:none;padding:0;border:0;color:var(--text)}
+.table-wrap{overflow-x:auto;margin:24px 0;border:1px solid var(--border);border-radius:8px;background:var(--bg-code)}
+.doc table,.table-wrap table,.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.doc th,.table-wrap th,.tbl th{text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--muted);padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg-card)}
+.doc td,.table-wrap td,.tbl td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)}
+.stage{width:100%;max-width:1120px;margin:0 auto;padding:0 20px 48px;background:transparent}
+.stage.iframe{min-height:70vh}
+.frame{width:100%;min-height:70vh;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);display:block}
+.code{margin:0 auto 48px;max-width:720px;width:100%;overflow:auto;padding:20px;font-family:ui-monospace,Cascadia Code,Consolas,monospace;font-size:13px;line-height:1.55;white-space:pre-wrap;color:var(--text);background:var(--bg-code);border:1px solid var(--border);border-radius:8px}
+.svgwrap{display:flex;align-items:center;justify-content:center;padding:24px}
+.svgwrap img,.svgwrap svg{max-width:100%;height:auto}
+.empty{max-width:560px;margin:12vh auto;padding:24px;text-align:center;color:var(--muted)}
+.empty h1{color:var(--text);font-size:1.6rem;margin:0 0 10px;font-weight:650;letter-spacing:-.03em}
+.extras{border-top:1px solid var(--border);padding:28px 20px 48px;max-width:720px;margin:0 auto;width:100%}
+.extras-grid{display:grid;gap:16px}
+.extras h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 8px}
+.extras a,.extras p{font-size:13px;color:var(--muted);text-decoration:none}
+.extras a:hover{color:var(--accent)}
+.attach-card{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:10px;padding:12px 16px;background:var(--bg-card);text-decoration:none;color:inherit}
+.attach-figure img{max-width:100%;border-radius:8px;border:1px solid var(--border)}
+.widget{border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg-card)}
 .widget img{max-width:100%;border-radius:8px;display:block}
-.widget iframe{width:100%;min-height:180px;border:0;border-radius:8px;background:#fff}
-.ticker{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;margin:0 1px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#e5e5e5;font-size:12px;font-weight:650;text-decoration:none;font-family:ui-monospace,monospace}
-.ticker:hover{border-color:rgba(255,255,255,.28);color:#fff}
-.tv-wrap{margin:18px 0;border:1px solid #262626;border-radius:12px;overflow:hidden;background:#0a0a0a;min-height:420px}
+.widget iframe{width:100%;min-height:180px;border:0;border-radius:8px}
+.ticker{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;background:var(--bg-code);border:1px solid var(--border);color:var(--accent);font-size:12px;font-weight:650;text-decoration:none;font-family:ui-monospace,monospace}
+.tv-wrap{margin:18px 0;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg-code)}
 .tv-wrap iframe{width:100%;height:420px;border:0;display:block}
-.table-wrap{overflow-x:auto;margin:24px 0;border:1px solid #262626;border-radius:12px;background:rgba(10,10,10,.4)}
-.doc table,.table-wrap table{width:100%;border-collapse:collapse;font-size:13px}
-.doc thead,.table-wrap thead{background:rgba(23,23,23,.7)}
-.doc th,.table-wrap th{text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:#a3a3a3;padding:10px 12px;text-align:left;border-bottom:1px solid #262626}
-.doc td,.table-wrap td{padding:10px 12px;border-bottom:1px solid rgba(38,38,38,.6);color:#d4d4d4}
-.stage{flex:1;min-height:0;position:relative;background:#080c14}
-.frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
-.doc{max-width:760px;margin:0 auto;padding:36px 24px 80px;line-height:1.7;color:#e2e8f0}
-.doc h1,.doc h2,.doc h3{color:#fff;letter-spacing:-.03em;line-height:1.2}
-.doc h1{font-size:2rem;margin:0 0 16px}
-.doc h2{font-size:1.35rem;margin:28px 0 10px}
-.doc p{margin:0 0 14px;color:#cbd5e1}
-.doc a{color:#7dd3fc}
-.doc ul{margin:0 0 16px 20px}
-.doc code{font-family:ui-monospace,Cascadia Code,monospace;font-size:.86em;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px}
-.doc pre{background:#0c1220;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;overflow:auto}
-.doc pre code{background:none;padding:0}
-.tbl{width:100%;border-collapse:collapse;font-size:13px}
-.tbl th,.tbl td{border:1px solid rgba(255,255,255,.1);padding:8px 10px;text-align:left}
-.tbl th{background:rgba(255,255,255,.04);color:#fff}
-.kind{font-size:11px;color:#64748b;border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:3px 8px}
-.code{margin:0;height:100%;overflow:auto;padding:24px;font-family:ui-monospace,Cascadia Code,Consolas,monospace;font-size:13px;line-height:1.55;white-space:pre-wrap;color:#e2e8f0}
-.svgwrap{height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
-.svgwrap svg{max-width:100%;max-height:100%}
-.empty{max-width:560px;margin:12vh auto;padding:24px;text-align:center;color:#94a3b8}
-.empty h1{color:#fff;font-size:1.6rem;margin:0 0 10px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:28px 20px 60px;max-width:1100px;margin:0 auto;width:100%;box-sizing:border-box}
-.card{display:block;text-decoration:none;color:inherit;background:rgba(15,22,36,.78);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px}
-.card:hover{border-color:rgba(255,255,255,.18)}
-.card h2{margin:0 0 8px;font-size:1rem;color:#fff;line-height:1.35;white-space:normal}
-.card p{margin:0;font-size:12px;color:#64748b;font-family:ui-monospace,monospace}
-.card-by{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.card-by img{width:22px;height:22px;border-radius:7px;object-fit:cover;border:1px solid rgba(255,255,255,.12)}
-.card-by span{font-size:12px;color:#7dd3fc}
+.docs-footer{margin-top:auto;border-top:1px solid var(--border);padding:28px 24px 36px;text-align:center;font-size:12px;color:var(--dim)}
+.docs-footer-nav{display:flex;justify-content:center;gap:16px;margin-top:12px}
+.docs-footer-nav a{color:var(--muted);text-decoration:none}
+.docs-footer-nav a:hover{color:var(--accent)}
+@media(max-width:720px){.home-main,.guide-container,.article-head,.community-main,.doc,.stage,.extras{padding-left:16px;padding-right:16px}}
 `;
 
 function formatPubDate(ts) {
@@ -258,25 +270,36 @@ function bylineHtml(item) {
 function wrap(title, inner, extraBar, poster, opts) {
   const isGuide = opts && opts.dest === 'guide';
   const brand = isGuide ? 'ATM Docs' : 'Trujillo AI';
-  const home = isGuide ? 'https://guides.trujillomingorance.com/' : '/';
+  const home = isGuide ? 'https://guides.trujillomingorance.com/' : '/library';
   return `<!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} · ${esc(brand)}</title>
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#080c14">
+<meta name="theme-color" content="#0b0f14">
 <link rel="icon" href="/avatar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <style>${SHELL_CSS}</style>
 </head>
-<body>
-<header class="bar">
-  <a class="brand" href="${home}"><img src="/avatar.png" alt="" width="22" height="22">${esc(brand)}</a>
-  <div class="bar-actions">${extraBar || ''}<a class="btn" href="https://ai.trujillomingorance.com">Studio</a></div>
+<body class="docs-body">
+<header class="docs-topbar">
+  <a class="brand" href="${home}"><img class="brand-avatar" src="/avatar.png" alt="" width="26" height="26"><span>${esc(brand)}</span></a>
+  <div class="topbar-actions">${extraBar || ''}<a class="hub-link" href="https://ai.trujillomingorance.com">Studio</a></div>
 </header>
 ${poster || ''}
 ${inner}
+<footer class="docs-footer">
+  <p>© 2026 ATM Software Labs</p>
+  <nav class="docs-footer-nav">
+    <a href="${home}">${isGuide ? 'Índice' : 'Library'}</a>
+    <a href="https://guides.trujillomingorance.com/">Guides</a>
+    <a href="https://ai.trujillomingorance.com/">Studio</a>
+  </nav>
+</footer>
 </body>
 </html>`;
 }
@@ -341,21 +364,21 @@ export function renderArtifactPage(item) {
   const raw = item.content || '';
   let stage = '';
   if (kind === 'html') {
-    stage = `<div class="stage"><iframe class="frame" sandbox="allow-scripts allow-forms allow-modals" srcdoc="${srcdocEsc(raw)}"></iframe></div>`;
+    stage = `<div class="stage iframe"><iframe class="frame" sandbox="allow-scripts allow-forms allow-modals" srcdoc="${srcdocEsc(raw)}" title="Artifact"></iframe></div>`;
   } else if (kind === 'svg') {
-    stage = `<div class="stage"><div class="svgwrap"><img alt="" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(raw)}"></div></div>`;
+    stage = `<div class="community-main"><div class="svgwrap"><img alt="" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(raw)}"></div></div>`;
   } else if (kind === 'mermaid') {
-    stage = `<div class="stage"><iframe class="frame" sandbox="allow-scripts allow-same-origin" srcdoc="${srcdocEsc(mermaidDoc(raw))}"></iframe></div>`;
+    stage = `<div class="stage iframe"><iframe class="frame" sandbox="allow-scripts allow-same-origin" srcdoc="${srcdocEsc(mermaidDoc(raw))}" title="Mermaid"></iframe></div>`;
   } else if (kind === 'markdown') {
-    stage = `<div class="stage" style="overflow:auto"><article class="doc">${renderMarkdown(stripMatchingH1(raw, item.title))}</article></div>`;
+    stage = `<main class="community-main"><article class="doc">${renderMarkdown(stripMatchingH1(raw, item.title))}</article></main>`;
   } else if (kind === 'csv') {
-    stage = `<div class="stage" style="overflow:auto"><article class="doc">${csvTable(raw)}</article></div>`;
+    stage = `<main class="community-main"><article class="doc">${csvTable(raw)}</article></main>`;
   } else if (kind === 'json') {
-    stage = `<div class="stage"><pre class="code">${esc(prettyJson(raw))}</pre></div>`;
+    stage = `<pre class="code">${esc(prettyJson(raw))}</pre>`;
   } else if (kind === 'plaintext') {
-    stage = `<div class="stage" style="overflow:auto"><article class="doc"><p style="white-space:pre-wrap">${esc(raw)}</p></article></div>`;
+    stage = `<main class="community-main"><article class="doc"><p style="white-space:pre-wrap">${esc(raw)}</p></article></main>`;
   } else {
-    stage = `<div class="stage"><pre class="code">${esc(raw)}</pre></div>`;
+    stage = `<pre class="code">${esc(raw)}</pre>`;
   }
   const extra = (item && item.extras) || {};
   const payload = JSON.stringify({
@@ -377,24 +400,26 @@ export function renderArtifactIndex(items, opts) {
   const cards = (items || []).map((it) => {
     const h = it.handle || handle || '';
     const pic = it.authorPicture || '/avatar.png';
-    const by = h
-      ? `<div class="card-by"><img src="${esc(pic)}" alt=""><span>@${esc(h)}</span></div>`
-      : '';
     const pref = (opts && opts.prefix) || LIBRARY_PREFIX;
-    return `<a class="card" href="${itemHref(it, pref)}">${by}<h2>${esc(it.title || it.slug)}</h2><p>${esc(pref)}/${esc(it.slug)}</p></a>`;
+    const meta = [h ? '@' + h : '', (pref || '') + '/' + it.slug].filter(Boolean).join(' · ');
+    return `<a class="guide-card" href="${itemHref(it, pref)}"><img class="guide-card-avatar" src="${esc(pic)}" alt="" width="36" height="36"><div class="guide-card-body"><h2>${esc(it.title || it.slug)}</h2><p data-notranslate>${esc(meta)}</p></div></a>`;
   }).join('');
   const heading = handle ? '@' + handle : ((opts && opts.heading) || 'Library');
-  const inner = cards
-    ? `<div class="grid">${cards}</div>`
-    : `<div class="empty"><h1>${esc(heading)}</h1><p>${handle ? 'Este autor aún no ha publicado en su library.' : 'Publica desde el studio. La URL es automática: ' + ORIGIN + '/library/slug'}</p></div>`;
   const dest = (opts && opts.dest) || 'artifact';
-  const poster = handle ? bylineHtml({ handle, authorName: (opts && opts.authorName) || handle, authorPicture: (opts && opts.authorPicture) || '/avatar.png', dest }) : '';
-  return wrap(heading, inner, '', poster, { dest });
+  const kicker = dest === 'guide' ? 'Guías' : 'Library';
+  const lede = handle
+    ? 'Publicaciones de @' + handle + '.'
+    : 'Piezas publicadas desde Studio. Misma cabecera, tarjetas y columna de lectura que Guides.';
+  const inner = `<main class="home-main">
+    <section class="hero"><p class="kicker">${esc(kicker)}</p><h1>${esc(heading)}</h1><p class="lede">${esc(lede)}</p></section>
+    ${cards ? `<div class="guides-grid">${cards}</div>` : `<p class="lede">${handle ? 'Este autor aún no ha publicado.' : 'Publica desde Studio. URL: ' + ORIGIN + '/library/slug'}</p>`}
+  </main>`;
+  return wrap(heading, inner, '', '', { dest, index: true });
 }
 
 export function renderArtifactMissing(opts) {
   const dest = opts && opts.dest;
   const home = dest === 'guide' ? 'https://guides.trujillomingorance.com/' : LIBRARY_PREFIX;
   const label = dest === 'guide' ? 'Ver guías' : 'Ver library';
-  return wrap('No encontrado', `<div class="empty"><h1>Esta pieza no existe</h1><p>Se despublicó, es de otra cuenta o el enlace es incorrecto.</p><p><a class="btn" href="${home}">${label}</a></p></div>`, '', '', { dest });
+  return wrap('No encontrado', `<main class="home-main"><section class="hero"><p class="kicker">404</p><h1>Esta pieza no existe</h1><p class="lede">Se despublicó, es de otra cuenta o el enlace es incorrecto.</p><p><a class="hub-link" href="${home}">${label}</a></p></section></main>`, '', '', { dest, index: true });
 }

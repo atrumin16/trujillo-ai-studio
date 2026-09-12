@@ -208,6 +208,33 @@ export function getAuthPageHtml(initialTab = 'login') {
       else if (tab === 'forgot') { forgotForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
       else if (tab === 'reset') { resetForm.style.display = 'flex'; tabsNav.style.display = 'none'; }
     }
+    function isAllowedReturn(url) {
+      if (!url) return false;
+      if (url.startsWith('/') && !url.startsWith('//')) return true;
+      try {
+        const u = new URL(url);
+        return u.hostname === 'trujillomingorance.com' || u.hostname.endsWith('.trujillomingorance.com') || u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+      } catch(e) {
+        return false;
+      }
+    }
+    function finishLogin(data) {
+      localStorage.setItem('trujillo_ai_token', data.token);
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('trujillo_auth_token', data.token);
+      localStorage.setItem('trujillo_ai_user', JSON.stringify(data.user));
+      localStorage.setItem('auth_user', JSON.stringify(data.user));
+      document.cookie = 'ta_session=' + encodeURIComponent(data.token) + '; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=2592000';
+      document.cookie = ['auth', 'token'].join('_') + '=' + encodeURIComponent(data.token) + '; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=2592000';
+      showAlert('Listo. Entrando al workspace...', true);
+      const params = new URLSearchParams(window.location.search);
+      const redirectTo = params.get('redirect_to') || params.get('return') || params.get('next');
+      if (redirectTo && isAllowedReturn(redirectTo)) {
+        setTimeout(() => { window.location.href = redirectTo; }, 400);
+      } else {
+        setTimeout(() => { window.location.href = '/'; }, 400);
+      }
+    }
     async function handleLoginSubmit(e) {
       e.preventDefault(); hideAlert();
       const email = document.getElementById('login-email').value.trim().toLowerCase();
@@ -218,10 +245,7 @@ export function getAuthPageHtml(initialTab = 'login') {
         const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Credenciales incorrectas');
-        localStorage.setItem('trujillo_ai_token', data.token);
-        localStorage.setItem('trujillo_ai_user', JSON.stringify(data.user));
-        showAlert('Listo. Entrando al workspace...', true);
-        setTimeout(() => { window.location.href = '/'; }, 400);
+        finishLogin(data);
       } catch (err) { showAlert(err.message); btn.disabled = false; btn.textContent = 'Continuar'; }
     }
     async function handleForgotSubmit(e) {
@@ -255,10 +279,7 @@ export function getAuthPageHtml(initialTab = 'login') {
         const res = await fetch('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, code, newPassword }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Código incorrecto o expirado');
-        localStorage.setItem('trujillo_ai_token', data.token);
-        localStorage.setItem('trujillo_ai_user', JSON.stringify(data.user));
-        showAlert('Contraseña actualizada. Entrando...', true);
-        setTimeout(() => { window.location.href = '/'; }, 400);
+        finishLogin(data);
       } catch (err) { showAlert(err.message); }
       finally { btn.disabled = false; btn.textContent = 'Guardar y entrar'; }
     }
@@ -290,10 +311,7 @@ export function getAuthPageHtml(initialTab = 'login') {
         const res = await fetch('/api/auth/verify-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: pendingVerifyEmail, code }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Código incorrecto');
-        localStorage.setItem('trujillo_ai_token', data.token);
-        localStorage.setItem('trujillo_ai_user', JSON.stringify(data.user));
-        showAlert('Cuenta activa. Entrando...', true);
-        setTimeout(() => { window.location.href = '/'; }, 400);
+        finishLogin(data);
       } catch (err) { showAlert(err.message); btn.disabled = false; btn.textContent = 'Verificar'; }
     }
   </script>

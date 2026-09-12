@@ -19,6 +19,11 @@
   var currentUser = null;
   try { currentUser = JSON.parse(localStorage.getItem('trujillo_ai_user') || 'null'); } catch(e) {}
   var authToken = localStorage.getItem('trujillo_ai_token') || '';
+  if (authToken) {
+    try {
+      document.cookie = 'ta_session=' + encodeURIComponent(authToken) + '; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=2592000';
+    } catch (e) {}
+  }
   (function consumeSocialCallback() {
     try {
       var params = new URLSearchParams(location.search);
@@ -36,6 +41,7 @@
           if (!res.ok || !res.d.token) return;
           localStorage.setItem('trujillo_ai_token', res.d.token);
           localStorage.setItem('trujillo_ai_user', JSON.stringify(res.d.user));
+          document.cookie = 'ta_session=' + encodeURIComponent(res.d.token) + '; Domain=.trujillomingorance.com; Path=/; Secure; SameSite=Lax; Max-Age=2592000';
           location.reload();
         }).catch(function () {});
     } catch (e) {}

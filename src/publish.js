@@ -57,6 +57,8 @@ export function publicIndexKey(dest) {
   return dest === 'guide' ? 'guide:public' : 'art:public';
 }
 
+export const HIDDEN_GUIDES_KEY = 'guide:hidden';
+
 export const LIBRARY_PREFIX = '/library';
 export const TITLE_MAX = 72;
 

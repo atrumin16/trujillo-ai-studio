@@ -12,14 +12,25 @@ export const STATIC_SLUGS = STATIC_GUIDES.reduce((map, g) => {
   return map
 }, Object.create(null))
 
-export function mergeGuideFeed(kvItems) {
+export const HIDDEN_KEY = 'guide:hidden'
+
+export function hiddenSlugSet(list) {
+  const set = Object.create(null)
+  ;(Array.isArray(list) ? list : []).forEach((it) => {
+    const slug = typeof it === 'string' ? it : (it && it.slug)
+    if (slug) set[String(slug).replace(/^@/, '')] = 1
+  })
+  return set
+}
+
+export function mergeGuideFeed(kvItems, hidden) {
   const seen = Object.create(null)
+  const hide = hiddenSlugSet(hidden)
   const out = []
-  STATIC_GUIDES.forEach((g) => { seen[g.slug] = 1; out.push(g) })
   ;(Array.isArray(kvItems) ? kvItems : []).forEach((it) => {
     if (!it) return
     const slug = String(it.slug || '').replace(/^@/, '')
-    if (!slug || seen[slug]) return
+    if (!slug || seen[slug] || hide[slug]) return
     seen[slug] = 1
     out.push({
       slug,
@@ -32,6 +43,11 @@ export function mergeGuideFeed(kvItems) {
       updatedAt: it.updatedAt || it.date || 0,
       static: !!it.static
     })
+  })
+  STATIC_GUIDES.forEach((g) => {
+    if (hide[g.slug] || seen[g.slug]) return
+    seen[g.slug] = 1
+    out.push(g)
   })
   return out
 }
